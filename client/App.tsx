@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import type { Analysis, ApiError, Operation, PlanDetail, PlanSummary, PortfolioResponse, Simulation } from '../shared/types.js';
+import { money } from './format.js';
+import { CalculationDetails, StepTimeline, TradeImpact } from './StepInsights.js';
 
-const money = (value: string) => value.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 const time = (value: string) => new Intl.DateTimeFormat('zh-CN', {
   timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
 }).format(new Date(value));
@@ -75,7 +76,12 @@ export default function App({ initial }: { initial?: PortfolioResponse }) {
   const [side, setSide] = useState<Operation['side']>('sell');
   const [quantity, setQuantity] = useState('100');
   const [name, setName] = useState('');
+  const [selectedStep, setSelectedStep] = useState<number | null>(null);
   const operations = simulation?.operations ?? [];
+  const steps = simulation?.steps ?? [];
+  const selectedIndex = selectedStep ?? steps.length;
+  const historical = selectedIndex < steps.length;
+  const viewedStep = selectedIndex > 0 ? steps[selectedIndex - 1] : undefined;
   const dirty = !activePlan && operations.length > 0;
 
   useEffect(() => {
@@ -97,7 +103,7 @@ export default function App({ initial }: { initial?: PortfolioResponse }) {
   function canLeave() { return !dirty || window.confirm('当前模拟尚未保存，继续将放弃这些操作。是否继续？'); }
   function newDraft() {
     if (!canLeave()) return;
-    setSimulation(null); setActivePlan(null); setName(''); setTradeError(''); setSaveError(''); setNotice(''); setTab('workspace');
+    setSimulation(null); setActivePlan(null); setSelectedStep(null); setName(''); setTradeError(''); setSaveError(''); setNotice(''); setTab('workspace');
   }
   async function refreshPlans() {
     setPlansError('');
@@ -111,7 +117,7 @@ export default function App({ initial }: { initial?: PortfolioResponse }) {
     setBusy('simulate');
     try {
       const result = await request<Simulation>('/simulate', { operations: [...operations, { symbol, side, quantity: Number(quantity) }] });
-      setSimulation(result); setNotice(`第 ${result.operations.length} 笔操作已加入，模拟结果已更新。`);
+      setSimulation(result); setSelectedStep(null); setNotice(`第 ${result.operations.length} 笔操作已加入，模拟结果已更新。`);
     } catch (error) { setTradeError(error instanceof Error ? error.message : '操作失败，请重试。'); }
     finally { setBusy(''); }
   }
@@ -121,7 +127,7 @@ export default function App({ initial }: { initial?: PortfolioResponse }) {
     setBusy('save');
     try {
       const saved = await request<PlanDetail>('/plans', { name, operations });
-      setActivePlan(saved); setSimulation(saved); setName(saved.name); setNotice(`“${saved.name}”已保存，刷新或重启后仍可重开。`);
+      setActivePlan(saved); setSimulation(saved); setSelectedStep(null); setName(saved.name); setNotice(`“${saved.name}”已保存，刷新或重启后仍可重开。`);
       await refreshPlans();
     } catch (error) { setSaveError(error instanceof Error ? error.message : '保存失败，请重试。'); }
     finally { setBusy(''); }
@@ -131,16 +137,17 @@ export default function App({ initial }: { initial?: PortfolioResponse }) {
     setBusy('open'); setPlansError('');
     try {
       const plan = await request<PlanDetail>(`/plans/${encodeURIComponent(id)}`);
-      setActivePlan(plan); setSimulation(plan); setName(plan.name); setTradeError(''); setSaveError(''); setNotice('已按保存时的行情快照重新计算此方案。'); setTab('workspace');
+      setActivePlan(plan); setSimulation(plan); setSelectedStep(null); setName(plan.name); setTradeError(''); setSaveError(''); setNotice('已按保存时的行情快照重新计算此方案。'); setTab('workspace');
     } catch (error) { setPlansError(error instanceof Error ? error.message : '重开失败，请重试。'); }
     finally { setBusy(''); }
   }
 
-  const current = simulation?.simulated ?? portfolio?.analysis;
   const original = simulation?.original ?? portfolio?.analysis;
+  const latest = simulation?.simulated ?? portfolio?.analysis;
+  const current = selectedIndex === 0 ? original : viewedStep?.analysis ?? latest;
   const snapshot = activePlan?.snapshot ?? portfolio?.snapshot;
-  const selected = current?.positions.find(p => p.symbol === symbol);
-  const compared = operations.length > 0;
+  const selected = latest?.positions.find(p => p.symbol === symbol);
+  const compared = selectedIndex > 0;
 
   return <div className="app-shell">
     <header className="app-header"><div className="header-inner">
@@ -162,6 +169,7 @@ export default function App({ initial }: { initial?: PortfolioResponse }) {
           {!plans.length ? <div className="empty-state"><span className="empty-icon"><Icon name="folder" /></span><h3>还没有保存的方案</h3><p>完成模拟后，为方案命名并保存，就能在这里重新打开。</p><button className="secondary" onClick={() => setTab('workspace')}>开始模拟<Icon name="arrow" /></button></div> : <div className="plan-grid">{plans.map(plan => <article className="plan-card" key={plan.id}><div className="plan-card-top"><span className="file-icon"><Icon name="folder" /></span><span className="status-tag">已保存</span></div><h3>{plan.name}</h3><p>{plan.operationCount} 笔操作 <span>·</span> {plan.snapshotId}</p><div className="plan-card-bottom"><small>{time(plan.createdAt)}</small><button className="text-button" disabled={!!busy} onClick={() => openPlan(plan.id)}>重开方案<Icon name="arrow" /></button></div></article>)}</div>}
         </section> : <>
           <div className="snapshot-line"><span className="snapshot-name">{snapshot.name}<span className="portfolio-id">{snapshot.portfolio_id}</span></span><span><span className="snapshot-dot" />固定行情快照 <time>{time(snapshot.snapshot_at)}（北京时间）</time></span><span className="currency-label">CNY / 人民币</span></div>
+          {historical && <div className="history-banner" role="status"><div><strong>{selectedIndex === 0 ? '正在回看原始组合' : `正在回看第 ${selectedIndex} 步`}</strong><span>共 {steps.length} 笔操作，完整方案保持不变。</span></div><button className="text-button" disabled={!!busy} onClick={() => setSelectedStep(null)}>回到最新结果<Icon name="arrow" /></button></div>}
           <section className="stats-grid" aria-label="资产摘要">
             <article className="stat-card main-stat"><div className="stat-label">组合总资产 <span>人民币</span></div><div className="stat-value"><small>¥</small>{money(current.totalAssets)}</div><p>{compared ? '模拟前后总资产不变' : '股票市值 + 现金余额'}<span className="tiny-dot" />固定价格 / 无费用</p></article>
             <article className="stat-card"><div className="stat-label">可用现金<span className="stat-glyph">¥</span></div><div className="stat-value"><small>¥</small>{money(current.cash)}</div><p>{compared ? `原始 ¥${money(original.cash)}` : `总资产占比 ${current.cashPercentage}%`}</p></article>
@@ -173,6 +181,7 @@ export default function App({ initial }: { initial?: PortfolioResponse }) {
           <div className="notice-slot" role="status" aria-live="polite">{notice && <span><Icon name="check" />{notice}</span>}</div>
 
           <div className="workspace-grid"><div className="analysis-column">
+            {viewedStep && <TradeImpact step={viewedStep} />}
             <section className="panel holdings-panel"><div className="section-heading"><div><h2>{compared ? '调仓前后对比' : '组合持仓'}<span className="subtle-count">{snapshot.instruments.length}</span></h2><p>{compared ? '每项数据依次展示原始值与模拟值。' : '基于同一行情快照计算，现金计入总资产。'}</p></div><span className={`view-badge ${compared ? 'blue' : ''}`}>{compared ? '模拟结果' : '原始组合'}</span></div>
               <div className="alerts-wrap"><Alerts analysis={current} /></div>
               <Comparison original={original} current={current} enabled={compared} />
@@ -186,22 +195,21 @@ export default function App({ initial }: { initial?: PortfolioResponse }) {
                 </div>
               </div>
             </section>
+            <CalculationDetails analysis={current} />
             <div className="method-note"><Icon name="check" /><p>计算口径：现金计入总资产；占比严格大于阈值时提醒。此处仅检查集中度，所有数据均为虚构测评数据。</p></div>
           </div>
 
           <aside className="simulation-column"><section className="panel trade-panel"><div className="section-heading"><div><h2><span className="section-icon"><Icon name="chart" /></span>调仓模拟</h2><p>{activePlan ? '此方案已保存，结果为只读。' : '按顺序添加买卖，预览组合变化。'}</p></div><span className="status-tag blue">{activePlan ? '已保存' : '草稿'}</span></div>
-            {activePlan ? <div className="readonly-box"><Icon name="check" /><strong>方案已持久保存</strong><p>原始组合与行情快照独立保留。需要尝试其他交易时，可从原始组合新建模拟。</p><button className="secondary full-width" disabled={!!busy} onClick={newDraft}><Icon name="plus" />新建模拟</button></div> : <form className="trade-form" onSubmit={addTrade} noValidate>
+            {activePlan ? <div className="readonly-box"><Icon name="check" /><strong>方案已持久保存</strong><p>原始组合与行情快照独立保留。需要尝试其他交易时，可从原始组合新建模拟。</p><button className="secondary full-width" disabled={!!busy} onClick={newDraft}><Icon name="plus" />新建模拟</button></div> : historical ? <div className="history-guard"><strong>历史结果仅供回看</strong><p>回到最新结果后，可继续添加交易或保存完整方案。</p><button className="secondary full-width" disabled={!!busy} onClick={() => setSelectedStep(null)}>回到最新结果<Icon name="arrow" /></button></div> : <form className="trade-form" onSubmit={addTrade} noValidate>
               <label htmlFor="symbol">交易标的</label><select id="symbol" value={symbol} disabled={!!busy} onChange={e => setSymbol(e.target.value)}>{snapshot.instruments.map(p => <option key={p.symbol} value={p.symbol}>{p.symbol} · {p.name}</option>)}</select>
               <div className="selected-info"><span>快照价 <strong>¥{selected?.price}</strong></span><span>当前持仓 <strong>{selected?.quantity} 股</strong></span></div>
               <span className="field-label" id="side-label">交易方向</span><div className="direction-control" role="group" aria-labelledby="side-label"><button type="button" aria-pressed={side === 'buy'} className={side === 'buy' ? 'selected buy' : ''} disabled={!!busy} onClick={() => setSide('buy')}>＋ 买入</button><button type="button" aria-pressed={side === 'sell'} className={side === 'sell' ? 'selected sell' : ''} disabled={!!busy} onClick={() => setSide('sell')}>－ 卖出</button></div>
               <label htmlFor="quantity">交易数量</label><div className="input-unit"><input id="quantity" type="text" inputMode="numeric" value={quantity} onChange={e => setQuantity(e.target.value)} disabled={!!busy} aria-describedby="quantity-hint" aria-invalid={!!tradeError} /><span>股</span></div><small id="quantity-hint" className="field-hint">仅支持正整数，所有操作使用快照价格。</small>
               <ErrorBox message={tradeError} /><button className="primary full-width" type="submit" disabled={!!busy || operations.length >= 100}><Icon name="plus" />{busy === 'simulate' ? '正在计算…' : '添加到模拟'}</button>
             </form>}
-            <div className="operation-section"><div className="operation-heading"><h3>操作序列 <span>{operations.length}</span></h3>{!activePlan && operations.length > 0 && <button className="text-button" disabled={!!busy} onClick={newDraft}><Icon name="reset" />清空</button>}</div>
-              {operations.length ? <ol className="operation-list">{operations.map((op, index) => <li key={index}><span className="operation-number">{String(index + 1).padStart(2, '0')}</span><div><strong>{snapshot.instruments.find(p => p.symbol === op.symbol)?.name}</strong><small>{op.symbol} · 快照价 ¥{snapshot.instruments.find(p => p.symbol === op.symbol)?.price}</small></div><span className={`operation-side ${op.side}`}>{op.side === 'buy' ? '买入' : '卖出'}<strong>{op.quantity.toLocaleString('en-US')} 股</strong></span></li>)}</ol> : <div className="operation-empty"><span className="empty-dash">↗</span><strong>还没有添加操作</strong><p>添加第一笔买卖，查看模拟结果。</p></div>}
-            </div>
-            <div className="simulation-summary"><div><span>模拟现金</span><strong>¥{money(current.cash)}</strong></div>{compared && <small>原始 ¥{money(original.cash)}</small>}<div><span>总资产</span><strong>¥{money(current.totalAssets)}</strong><span className="unchanged">保持不变</span></div></div>
-            {!activePlan && <form className="save-form" onSubmit={savePlan} noValidate><label htmlFor="plan-name">保存当前方案</label><input id="plan-name" placeholder="为这次调仓起个名字" value={name} disabled={!!busy} onChange={e => setName(e.target.value)} aria-invalid={!!saveError} /><ErrorBox message={saveError} /><button className="secondary full-width" type="submit" disabled={!!busy}><Icon name="save" />{busy === 'save' ? '正在保存…' : '保存方案'}</button><small className="field-hint">保存后可重开查看，原始持仓不会改变。</small></form>}
+            <StepTimeline steps={steps} selectedIndex={selectedIndex} onSelect={index => { setSelectedStep(index === steps.length ? null : index); setNotice(''); }} disabled={!!busy} onClear={activePlan ? undefined : newDraft} />
+            <div className="simulation-summary"><div><span>{historical ? selectedIndex === 0 ? '原始现金' : `第 ${selectedIndex} 步现金` : '模拟现金'}</span><strong>¥{money(current.cash)}</strong></div>{compared && <small>原始 ¥{money(original.cash)}</small>}<div><span>总资产</span><strong>¥{money(current.totalAssets)}</strong><span className="unchanged">保持不变</span></div></div>
+            {!activePlan && !historical && <form className="save-form" onSubmit={savePlan} noValidate><label htmlFor="plan-name">保存当前方案</label><input id="plan-name" placeholder="为这次调仓起个名字" value={name} disabled={!!busy} onChange={e => setName(e.target.value)} aria-invalid={!!saveError} /><ErrorBox message={saveError} /><button className="secondary full-width" type="submit" disabled={!!busy}><Icon name="save" />{busy === 'save' ? '正在保存…' : '保存方案'}</button><small className="field-hint">保存后可重开查看，原始持仓不会改变。</small></form>}
           </section><div className="simulation-tip"><span>i</span><p>买卖仅用于模拟，不会产生真实交易。未保存的草稿不会在刷新后保留。</p></div></aside>
           </div>
         </>}

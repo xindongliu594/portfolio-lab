@@ -25,3 +25,16 @@ Plan: docs/superpowers/plans/2026-11-11-portfolio-plan.md
 - 29/29 测试、生产构建、10 组完整浏览器检查通过，8 张截图更新；12 个 320～1440px 宽度均无页面级溢出。
 - DESIGN.md 与 docs/DEMO.md 已补充视觉取舍和全栈能力讲解，强调真实理解、复核和个人贡献；不编造候选人经历。
 - 独立 UI 审阅无 Critical/Important 问题；补查发现 320px 数字单元内溢出，定位到字号与单元可用宽度，针对 380px 以下调整间距和字号。
+
+## 调仓解释与逐步回看
+
+Plan: docs/superpowers/plans/2026-11-11-step-replay-plan.md；baseline a304395。
+
+- 2026-11-11 11:31（北京时间）：用户已确认开始本轮升级，继续在本地开发分支执行。
+- Task 1: complete。新增3项领域断言先红灯，再实现 steps/impact；HTTP 保存/重开/数据库重启补充逐步结果一致断言。另以同名标的与行业做突变检查：移除type后失败，恢复type+key后通过。
+- Task 2: complete。新增3项SSR先红灯，浏览器先因缺失trade-impact失败；实现后36/36测试、构建和14组真实浏览器检查通过，9张截图保留。
+- Ruling: 历史回看只切换显示，保留完整操作；草稿回看时隐藏交易与保存并提示返回最新，避免意外保存前缀或从旧状态继续。已保存方案始终只读。
+- Ruling: steps和impact为派生响应，SQLite仍只保存快照和全量操作；重开自然复算，旧方案无需迁移。
+- 320/360/390/600/768/900/1024/1440px 下检查最新、第一步展开依据、原始展开依据共24种状态，页面、金额和影响面板均无溢出，报告 docs/replay-layout-verification.json。
+- Task 3: complete。独立审阅通过，无Critical/Important/Minor；独立解压后npm ci、36项测试、构建与实际生产服务保存/重启/逐步重开均通过。最终包CRC和逐文件一致性检查通过后交付。
+- 本轮升级计时：11:31～11:53，约23分钟；原始PLAN.md继续保留，后续需求单独记录在step-replay设计与计划中。

@@ -1,0 +1,173 @@
+{
+  "verifiedAt": "2026-11-11T03:47:30.651Z",
+  "results": [
+    {
+      "width": 320,
+      "state": "latest",
+      "pageFits": true,
+      "amountsFit": true,
+      "impactFits": true
+    },
+    {
+      "width": 320,
+      "state": "first-step-with-basis",
+      "pageFits": true,
+      "amountsFit": true,
+      "impactFits": true
+    },
+    {
+      "width": 320,
+      "state": "original-with-basis",
+      "pageFits": true,
+      "amountsFit": true,
+      "impactFits": true
+    },
+    {
+      "width": 360,
+      "state": "latest",
+      "pageFits": true,
+      "amountsFit": true,
+      "impactFits": true
+    },
+    {
+      "width": 360,
+      "state": "first-step-with-basis",
+      "pageFits": true,
+      "amountsFit": true,
+      "impactFits": true
+    },
+    {
+      "width": 360,
+      "state": "original-with-basis",
+      "pageFits": true,
+      "amountsFit": true,
+      "impactFits": true
+    },
+    {
+      "width": 390,
+      "state": "latest",
+      "pageFits": true,
+      "amountsFit": true,
+      "impactFits": true
+    },
+    {
+      "width": 390,
+      "state": "first-step-with-basis",
+      "pageFits": true,
+      "amountsFit": true,
+      "impactFits": true
+    },
+    {
+      "width": 390,
+      "state": "original-with-basis",
+      "pageFits": true,
+      "amountsFit": true,
+      "impactFits": true
+    },
+    {
+      "width": 600,
+      "state": "latest",
+      "pageFits": true,
+      "amountsFit": true,
+      "impactFits": true
+    },
+    {
+      "width": 600,
+      "state": "first-step-with-basis",
+      "pageFits": true,
+      "amountsFit": true,
+      "impactFits": true
+    },
+    {
+      "width": 600,
+      "state": "original-with-basis",
+      "pageFits": true,
+      "amountsFit": true,
+      "impactFits": true
+    },
+    {
+      "width": 768,
+      "state": "latest",
+      "pageFits": true,
+      "amountsFit": true,
+      "impactFits": true
+    },
+    {
+      "width": 768,
+      "state": "first-step-with-basis",
+      "pageFits": true,
+      "amountsFit": true,
+      "impactFits": true
+    },
+    {
+      "width": 768,
+      "state": "original-with-basis",
+      "pageFits": true,
+      "amountsFit": true,
+      "impactFits": true
+    },
+    {
+      "width": 900,
+      "state": "latest",
+      "pageFits": true,
+      "amountsFit": true,
+      "impactFits": true
+    },
+    {
+      "width": 900,
+      "state": "first-step-with-basis",
+      "pageFits": true,
+      "amountsFit": true,
+      "impactFits": true
+    },
+    {
+      "width": 900,
+      "state": "original-with-basis",
+      "pageFits": true,
+      "amountsFit": true,
+      "impactFits": true
+    },
+    {
+      "width": 1024,
+      "state": "latest",
+      "pageFits": true,
+      "amountsFit": true,
+      "impactFits": true
+    },
+    {
+      "width": 1024,
+      "state": "first-step-with-basis",
+      "pageFits": true,
+      "amountsFit": true,
+      "impactFits": true
+    },
+    {
+      "width": 1024,
+      "state": "original-with-basis",
+      "pageFits": true,
+      "amountsFit": true,
+      "impactFits": true
+    },
+    {
+      "width": 1440,
+      "state": "latest",
+      "pageFits": true,
+      "amountsFit": true,
+      "impactFits": true
+    },
+    {
+      "width": 1440,
+      "state": "first-step-with-basis",
+      "pageFits": true,
+      "amountsFit": true,
+      "impactFits": true
+    },
+    {
+      "width": 1440,
+      "state": "original-with-basis",
+      "pageFits": true,
+      "amountsFit": true,
+      "impactFits": true
+    }
+  ]
+}

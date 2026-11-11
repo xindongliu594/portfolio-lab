@@ -23,7 +23,16 @@ export interface Analysis {
   totalAssets: string; cash: string; cashPercentage: string; positionCount: number;
   positions: Position[]; industries: Industry[]; alerts: Alert[];
 }
-export interface Simulation { original: Analysis; simulated: Analysis; operations: Operation[] }
+export interface StepImpact {
+  tradeValue: string;
+  cash: { before: string; after: string };
+  position: { symbol: string; name: string; quantityBefore: number; quantityAfter: number; percentageBefore: string; percentageAfter: string };
+  industry: { name: string; percentageBefore: string; percentageAfter: string };
+  resolvedAlerts: Alert[];
+  triggeredAlerts: Alert[];
+}
+export interface SimulationStep { index: number; operation: Operation; analysis: Analysis; impact: StepImpact }
+export interface Simulation { original: Analysis; simulated: Analysis; operations: Operation[]; steps: SimulationStep[] }
 export interface PortfolioResponse { snapshot: Snapshot; analysis: Analysis }
 export interface PlanSummary { id: string; name: string; createdAt: string; operationCount: number; snapshotId: string }
 export interface PlanDetail extends PlanSummary, Simulation { snapshot: Snapshot }

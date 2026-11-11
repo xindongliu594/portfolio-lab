@@ -63,8 +63,34 @@ try {
   await expect(page.locator('.operation-list li')).toHaveCount(2);
   await expect(page.locator('.simulation-summary')).toContainText('25,000.00');
   await expect(page.locator('.risk-banner')).toContainText('55.00%');
+  await expect(page.locator('.trade-impact')).toContainText('30,000.00');
+  await expect(page.locator('.trade-impact')).toContainText('25,000.00');
+  await expect(page.locator('.trade-impact')).toContainText('新增 1 项提醒');
   await screenshot(page, '03-simulation-comparison.png');
   checks.push('AC-03: then buy A02 100, cash 25000, industry 55%, two sequential operations');
+
+  await page.getByRole('button', { name: /查看第 1 步/ }).click();
+  await expect(page.locator('.history-banner')).toContainText('第 1 步');
+  await expect(page.locator('.simulation-summary')).toContainText('30,000.00');
+  await expect(page.locator('.risk-banner')).toContainText('无集中度超限');
+  await expect(page.locator('.trade-impact')).toContainText('解除 2 项提醒');
+  await expect(page.locator('.operation-list li')).toHaveCount(2);
+  await expect(page.locator('.trade-form')).toHaveCount(0);
+  await expect(page.locator('.save-form')).toHaveCount(0);
+  await page.locator('.calculation-details summary').click();
+  await expect(page.locator('.calculation-body')).toBeVisible();
+  await expect(page.locator('.calculation-body')).toContainText('30,000.00 ÷ 100,000.00');
+  await screenshot(page, '09-step-replay-and-basis.png');
+  await page.getByRole('button', { name: '查看原始组合', exact: true }).click();
+  await expect(page.locator('.simulation-summary')).toContainText('20,000.00');
+  await expect(page.locator('.risk-banner')).toContainText('发现 2 项');
+  await expect(page.locator('.trade-impact')).toHaveCount(0);
+  await page.getByRole('button', { name: '回到最新结果', exact: true }).first().click();
+  await expect(page.locator('.simulation-summary')).toContainText('25,000.00');
+  await expect(page.locator('.trade-form')).toBeVisible();
+  await page.locator('.calculation-details summary').click();
+  checks.push('Step replay: original/first/latest synchronize all results, preserve operations and guard draft writes');
+  checks.push('Calculation basis: selected-step formulas and strict-threshold rules can be expanded');
 
   await page.getByLabel('交易数量', { exact: true }).fill('1000');
   await page.getByRole('button', { name: '添加到模拟', exact: true }).click();
@@ -132,6 +158,31 @@ try {
   expect(original.analysis.positions[1].quantity).toBe(400);
   await screenshot(page, '07-reopened-after-restart.png');
   checks.push('AC-05 restart: real production server restarted, persisted plan restored, original unchanged');
+
+  await page.getByRole('button', { name: /查看第 1 步/ }).click();
+  await expect(page.locator('.simulation-summary')).toContainText('30,000.00');
+  await expect(page.locator('.trade-impact')).toContainText('解除 2 项提醒');
+  await page.getByRole('button', { name: '回到最新结果', exact: true }).first().click();
+  checks.push('Persisted replay: step impacts are regenerated from saved snapshot after service restart');
+
+  const continuation = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  continuation.on('dialog', dialog => dialog.accept());
+  try {
+    await continuation.goto(url);
+    await continuation.getByRole('button', { name: '添加到模拟', exact: true }).click();
+    await continuation.getByLabel('交易标的', { exact: true }).selectOption('A02');
+    await continuation.getByRole('button', { name: '＋ 买入', exact: true }).click();
+    await continuation.getByRole('button', { name: '添加到模拟', exact: true }).click();
+    await continuation.getByRole('button', { name: /查看第 1 步/ }).click();
+    await continuation.getByRole('button', { name: '回到最新结果', exact: true }).first().click();
+    await continuation.getByLabel('交易标的', { exact: true }).selectOption('A03');
+    await continuation.getByLabel('交易数量', { exact: true }).fill('10');
+    await continuation.getByRole('button', { name: '添加到模拟', exact: true }).click();
+    await expect(continuation.locator('.simulation-summary')).toContainText('24,000.00');
+    await expect(continuation.locator('.operation-list li')).toHaveCount(3);
+    await expect(continuation.locator('.trade-impact')).toContainText('25,000.00');
+    checks.push('Continue after replay: third trade starts from latest state, cash 25000 to 24000');
+  } finally { await continuation.close(); }
 
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);

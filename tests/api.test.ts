@@ -38,6 +38,9 @@ test('HTTP AC-01 to AC-04: correct calculations and errors; original remains unc
     const sequential = await api.request('/api/simulate', { operations });
     assert.equal(sequential.body.simulated.cash, '25000.00');
     assert.equal(sequential.body.simulated.industries[0].percentage, '55.00');
+    assert.equal(sequential.body.steps.length, 2);
+    assert.equal(sequential.body.steps[0].analysis.cash, '30000.00');
+    assert.equal(sequential.body.steps[1].impact.cash.before, '30000.00');
     for (const op of [
       { symbol: 'A01', side: 'buy', quantity: 201 },
       { symbol: 'A01', side: 'sell', quantity: 401 },
@@ -65,6 +68,7 @@ test('AC-05: real SQLite survives HTTP server/database restart; persisted snapsh
     assert.equal(saved.status, 201);
     assert.equal(saved.body.name, '验收方案');
     assert.equal(saved.body.simulated.cash, '25000.00');
+    assert.equal(saved.body.steps.length, 2);
     const id = saved.body.id;
     await api.close();
     const changed = structuredClone(snapshot);
@@ -77,6 +81,7 @@ test('AC-05: real SQLite survives HTTP server/database restart; persisted snapsh
     assert.equal(reopened.body.simulated.totalAssets, '100000.00');
     assert.equal(reopened.body.snapshot.cash, '20000.00');
     assert.equal(reopened.body.original.positions[0].quantity, 400);
+    assert.deepEqual(reopened.body.steps, saved.body.steps);
     assert.equal((await api.request('/api/plans')).body[0].operationCount, 2);
   } finally { await api.close(); rmSync(dir, { recursive: true, force: true }); }
 });

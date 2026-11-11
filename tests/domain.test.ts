@@ -97,3 +97,63 @@ test('malformed operations and more than 100 operations are rejected', () => {
   }
   assert.equal(simulate(source, []).simulated.cash, '20000.00');
 });
+
+test('steps explain each trade against its immediate predecessor, including alert transitions', () => {
+  const result = simulate(source, [sell, buy]);
+  const steps = result.steps;
+  assert.ok(Array.isArray(steps), 'simulation must return ordered steps');
+  assert.equal(steps.length, 2);
+  assert.equal(steps[0].index, 1);
+  assert.deepEqual(steps[0].operation, sell);
+  assert.equal(steps[0].analysis.cash, '30000.00');
+  assert.equal(steps[0].impact.tradeValue, '10000.00');
+  assert.deepEqual(steps[0].impact.cash, { before: '20000.00', after: '30000.00' });
+  assert.equal(steps[0].impact.position.quantityBefore, 400);
+  assert.equal(steps[0].impact.position.quantityAfter, 300);
+  assert.equal(steps[0].impact.position.percentageBefore, '40.00');
+  assert.equal(steps[0].impact.position.percentageAfter, '30.00');
+  assert.equal(steps[0].impact.industry.percentageBefore, '60.00');
+  assert.equal(steps[0].impact.industry.percentageAfter, '50.00');
+  assert.deepEqual(steps[0].impact.resolvedAlerts.map(a => a.key), ['A01', '科技']);
+  assert.deepEqual(steps[0].impact.triggeredAlerts, []);
+  assert.deepEqual(steps[1].impact.cash, { before: '30000.00', after: '25000.00' });
+  assert.equal(steps[1].impact.position.quantityBefore, 400);
+  assert.equal(steps[1].impact.position.quantityAfter, 500);
+  assert.equal(steps[1].impact.industry.percentageBefore, '50.00');
+  assert.equal(steps[1].impact.industry.percentageAfter, '55.00');
+  assert.deepEqual(steps[1].impact.triggeredAlerts.map(a => a.key), ['科技']);
+  assert.deepEqual(steps[1].impact.resolvedAlerts, []);
+  assert.deepEqual(steps[1].analysis, result.simulated);
+});
+
+test('empty simulation has no steps; adding a later operation does not mutate previous steps', () => {
+  assert.deepEqual(simulate(source, []).steps, []);
+  const previous = simulate(source, [sell, buy]);
+  const serialized = JSON.stringify(previous.steps);
+  const next = simulate(source, [sell, buy, { symbol: 'A03', side: 'buy', quantity: 10 }]);
+  assert.equal(next.steps[2].analysis.cash, '24000.00');
+  assert.equal(next.steps[0].analysis.positions[1].quantity, 400);
+  assert.equal(next.steps[1].analysis.positions[2].quantity, 100);
+  assert.equal(JSON.stringify(previous.steps), serialized);
+  assert.throws(() => simulate(source, [sell, buy, { symbol: 'A01', side: 'sell', quantity: 301 }]));
+  assert.equal(JSON.stringify(previous.steps), serialized);
+});
+
+test('unchanged alert membership does not produce a newly triggered warning', () => {
+  const result = simulate(source, [{ symbol: 'A01', side: 'sell', quantity: 1 }]);
+  assert.ok(Array.isArray(result.steps));
+  assert.deepEqual(result.steps[0].impact.triggeredAlerts, []);
+  assert.deepEqual(result.steps[0].impact.resolvedAlerts, []);
+  assert.equal(result.steps[0].analysis.alerts.length, 2);
+});
+
+test('alert identity distinguishes a stock and industry with the same key', () => {
+  const fixture = structuredClone(source);
+  fixture.cash = '15000.00';
+  fixture.instruments[0].symbol = '科技';
+  fixture.instruments[1].quantity = 500;
+  const result = simulate(fixture, [{ symbol: '科技', side: 'sell', quantity: 100 }]);
+  assert.deepEqual(result.steps[0]!.impact.resolvedAlerts.map(a => a.type), ['instrument']);
+  assert.deepEqual(result.steps[0]!.impact.triggeredAlerts, []);
+  assert.deepEqual(result.steps[0]!.analysis.alerts.map(a => a.type), ['industry']);
+});

@@ -1,4 +1,4 @@
-import type { Analysis, Alert, Operation, Simulation, Snapshot } from '../shared/types.js';
+import type { Analysis, Alert, Operation, Simulation, SimulationStep, Snapshot, StepImpact } from '../shared/types.js';
 
 export class DomainError extends Error {
   constructor(public code: string, message: string, public operationIndex?: number) { super(message); }
@@ -60,12 +60,34 @@ export function analyze(snapshot: Snapshot): Analysis {
     positionCount: positions.filter(p => p.quantity > 0).length, positions, industries, alerts };
 }
 
+function describeImpact(before: Analysis, after: Analysis, operation: Operation, tradeValue: string): StepImpact {
+  const oldPosition = before.positions.find(p => p.symbol === operation.symbol)!;
+  const position = after.positions.find(p => p.symbol === operation.symbol)!;
+  const oldIndustry = before.industries.find(p => p.industry === position.industry)!;
+  const industry = after.industries.find(p => p.industry === position.industry)!;
+  const identity = (alert: Alert) => `${alert.type}:${alert.key}`;
+  const oldKeys = new Set(before.alerts.map(identity));
+  const newKeys = new Set(after.alerts.map(identity));
+  return {
+    tradeValue,
+    cash: { before: before.cash, after: after.cash },
+    position: { symbol: position.symbol, name: position.name, quantityBefore: oldPosition.quantity,
+      quantityAfter: position.quantity, percentageBefore: oldPosition.percentage, percentageAfter: position.percentage },
+    industry: { name: industry.industry, percentageBefore: oldIndustry.percentage, percentageAfter: industry.percentage },
+    resolvedAlerts: before.alerts.filter(alert => !newKeys.has(identity(alert))),
+    triggeredAlerts: after.alerts.filter(alert => !oldKeys.has(identity(alert))),
+  };
+}
+
 export function simulate(snapshot: Snapshot, input: unknown): Simulation {
   if (!Array.isArray(input) || input.length > 100) {
     throw new DomainError('INVALID_OPERATIONS', '操作必须为数组，每个方案最多包含 100 笔操作。');
   }
   const working = structuredClone(snapshot);
   const operations: Operation[] = [];
+  const original = analyze(snapshot);
+  const steps: SimulationStep[] = [];
+  let before = original;
   let cash = cents(working.cash);
   for (const [index, raw] of input.entries()) {
     try {
@@ -89,12 +111,16 @@ export function simulate(snapshot: Snapshot, input: unknown): Simulation {
         position.quantity -= quantity;
         cash = safe(cash + amount);
       }
-      operations.push({ symbol, side, quantity });
+      const operation: Operation = { symbol, side, quantity };
+      operations.push(operation);
+      working.cash = decimal(cash);
+      const analysis = analyze(working);
+      steps.push({ index: index + 1, operation, analysis, impact: describeImpact(before, analysis, operation, decimal(amount)) });
+      before = analysis;
     } catch (error) {
       if (error instanceof DomainError) error.operationIndex = index;
       throw error;
     }
   }
-  working.cash = decimal(cash);
-  return { original: analyze(snapshot), simulated: analyze(working), operations };
+  return { original, simulated: before, operations, steps };
 }
