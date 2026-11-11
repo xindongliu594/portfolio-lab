@@ -18,3 +18,10 @@ Plan: docs/superpowers/plans/2026-11-11-portfolio-plan.md
 - 独立解压目录的构建产物实际启动成功，首页与原始组合 API 烟测通过。
 - Final review: 独立审阅 fa5fb8c..d144db9，未发现已确认的 Critical/Important/Minor 缺陷；29/29 测试和类型检查通过；补充随机序列核验与独立 BigInt 模型一致。审阅摘要保存在 docs/CODE-REVIEW.md。
 - Integration: 用户要求先本地完成；保留 codex/portfolio-assessment 分支与本地项目，不合并、不推送、不创建远程 PR。
+
+## 后续界面精简
+
+- 用户要求简约美化，并明确选择纯白＋蓝色。按该方向调整摘要布局、文字大小、蓝色使用及持仓变化标记，保留原有前后端业务契约。
+- 29/29 测试、生产构建、10 组完整浏览器检查通过，8 张截图更新；12 个 320～1440px 宽度均无页面级溢出。
+- DESIGN.md 与 docs/DEMO.md 已补充视觉取舍和全栈能力讲解，强调真实理解、复核和个人贡献；不编造候选人经历。
+- 独立 UI 审阅无 Critical/Important 问题；补查发现 320px 数字单元内溢出，定位到字号与单元可用宽度，针对 380px 以下调整间距和字号。

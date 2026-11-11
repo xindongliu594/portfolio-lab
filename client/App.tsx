@@ -5,7 +5,7 @@ const money = (value: string) => value.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 const time = (value: string) => new Intl.DateTimeFormat('zh-CN', {
   timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
 }).format(new Date(value));
-const colors = ['#5269d8', '#51a698', '#c59b52', '#9b7abd', '#6997bd'];
+const colors = ['#3262d6', '#6387cd', '#8da8d5', '#acbedc', '#c5d2e8'];
 
 function Icon({ name }: { name: 'chart' | 'folder' | 'plus' | 'arrow' | 'save' | 'reset' | 'check' | 'alert' }) {
   const paths = {
@@ -48,11 +48,11 @@ function Comparison({ original, current, enabled }: { original: Analysis; curren
     <thead><tr><th>标的 / 行业</th><th>快照价格</th><th>持仓数量{enabled && <small>原始 → 模拟</small>}</th><th>市值（元）{enabled && <small>原始 → 模拟</small>}</th><th>资产占比{enabled && <small>原始 → 模拟</small>}</th><th>集中度</th></tr></thead>
     <tbody>{current.positions.map((p, i) => {
       const before = original.positions[i]!;
-      return <tr key={p.symbol}><td><div className="stock-cell"><span className="stock-avatar" style={{ '--stock-color': colors[Math.max(0, current.industries.findIndex(x => x.industry === p.industry)) % colors.length] } as React.CSSProperties}>{p.symbol.slice(1)}</span><span><strong>{p.name}</strong><small>{p.symbol}<span className="dot-separator">·</span>{p.industry}</small></span></div></td>
+      return <tr key={p.symbol} className={enabled && before.quantity !== p.quantity ? 'position-changed' : ''}><td><div className="stock-cell"><span className="stock-avatar">{p.symbol.slice(1)}</span><span><strong>{p.name}</strong><small>{p.symbol}<span className="dot-separator">·</span>{p.industry}</small></span></div></td>
         <td className="num">{money(p.price)}</td>
         <td className="num">{enabled && <small className={before.quantity !== p.quantity ? 'changed-before' : ''}>{before.quantity.toLocaleString('en-US')} →</small>}<span className={before.quantity !== p.quantity ? 'changed' : ''}>{p.quantity.toLocaleString('en-US')}</span></td>
         <td className="num">{enabled && <small>{money(before.marketValue)} →</small>}{money(p.marketValue)}</td>
-        <td className="num"><div>{enabled && <small>{before.percentage}% →</small>}{p.percentage}%</div><div className="mini-bar"><span style={{ width: `${p.percentage}%`, background: p.exceeded ? '#d3973c' : '#667cda' }} /></div></td>
+        <td className="num"><div>{enabled && <small>{before.percentage}% →</small>}{p.percentage}%</div><div className="mini-bar"><span style={{ width: `${p.percentage}%`, background: p.exceeded ? '#b57924' : '#3262d6' }} /></div></td>
         <td><span className={`status-tag ${p.exceeded ? 'amber' : ''}`}>{p.exceeded ? '超过 30%' : '阈值内'}</span></td>
       </tr>;
     })}</tbody>
@@ -154,7 +154,7 @@ export default function App({ initial }: { initial?: PortfolioResponse }) {
         {loadError ? <><ErrorBox message={loadError} /><button className="primary" onClick={() => window.location.reload()}>重新连接</button></> : <><span className="spinner" />正在载入投资组合…</>}
       </section> : <>
         <div className="breadcrumb">研究工作台<span>/</span>{tab === 'workspace' ? '组合分析' : '方案管理'}</div>
-        <div className="page-heading"><div><div className="eyebrow">YOUR PORTFOLIO, IN FOCUS</div><h1>{tab === 'workspace' ? '投资组合分析' : '已保存方案'}</h1><p>{tab === 'workspace' ? '看清资产结构，验证每一次调仓。' : '保留每一次思考，随时重开模拟结果。'}</p></div><button className="secondary" disabled={!!busy} onClick={newDraft}><Icon name="plus" />新建模拟</button></div>
+        <div className="page-heading"><div><h1>{tab === 'workspace' ? '投资组合分析' : '已保存方案'}</h1><p>{tab === 'workspace' ? '基于固定行情，查看集中度并对比调仓前后的变化。' : '查看保存在本机的调仓方案，重开并复核模拟结果。'}</p></div><button className="secondary" disabled={!!busy} onClick={newDraft}><Icon name="plus" />新建模拟</button></div>
 
         {tab === 'plans' ? <section className="panel plans-panel">
           <div className="section-heading"><div><h2>方案档案 <span className="subtle-count">{plans.length}</span></h2><p>保存在本机，可在刷新页面和重启服务后重新打开。</p></div><button className="text-button" onClick={refreshPlans} disabled={!!busy}>刷新列表</button></div>
@@ -176,11 +176,11 @@ export default function App({ initial }: { initial?: PortfolioResponse }) {
             <section className="panel holdings-panel"><div className="section-heading"><div><h2>{compared ? '调仓前后对比' : '组合持仓'}<span className="subtle-count">{snapshot.instruments.length}</span></h2><p>{compared ? '每项数据依次展示原始值与模拟值。' : '基于同一行情快照计算，现金计入总资产。'}</p></div><span className={`view-badge ${compared ? 'blue' : ''}`}>{compared ? '模拟结果' : '原始组合'}</span></div>
               <div className="alerts-wrap"><Alerts analysis={current} /></div>
               <Comparison original={original} current={current} enabled={compared} />
-              <div className="holdings-footer"><span className="legend-dot" />占比以总资产为分母<span>金额单位：人民币元</span></div>
+              <div className="holdings-footer"><span className="legend-dot" />{compared ? '浅蓝色标记本次发生变化的持仓' : '占比以总资产为分母，包含现金'}<span>金额单位：人民币元</span></div>
             </section>
 
             <section className="panel industry-panel"><div className="section-heading"><div><h2>行业分布</h2><p>行业集中度阈值为 50%，现金不归入任何行业。</p></div><span className="view-badge">{current.industries.length} 个行业</span></div>
-              <div className="industry-content"><div className="allocation-strip" aria-hidden="true">{current.industries.map((x, i) => <span key={x.industry} style={{ width: `${x.percentage}%`, background: colors[i % colors.length] }} />)}<span style={{ width: `${current.cashPercentage}%`, background: '#dce1eb' }} /></div>
+              <div className="industry-content"><div className="allocation-strip" aria-hidden="true">{current.industries.map((x, i) => <span key={x.industry} style={{ width: `${x.percentage}%`, background: colors[i % colors.length] }} />)}<span style={{ width: `${current.cashPercentage}%`, background: '#eceef1' }} /></div>
                 <div className="industry-list">{current.industries.map((x, i) => <div className="industry-row" key={x.industry}><span className="industry-label"><i style={{ background: colors[i % colors.length] }} />{x.industry}</span><div className="industry-track"><span style={{ width: `${x.percentage}%`, background: colors[i % colors.length] }} /><span className="threshold-mark" /></div><div className="industry-ratio">{compared && <small>{original.industries.find(y => y.industry === x.industry)?.percentage}% → </small>}<strong className={x.exceeded ? 'amber-text' : ''}>{x.percentage}%</strong></div><span className={`industry-state ${x.exceeded ? 'amber-text' : ''}`}>{x.exceeded ? '超限' : '正常'}</span></div>)}
                   <div className="cash-row"><span><i />现金</span><strong>{current.cashPercentage}%</strong><small>计入总资产，独立于行业</small></div>
                 </div>

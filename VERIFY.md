@@ -79,3 +79,9 @@ npm run package
 - 提交包独立验证：ZIP CRC 检查通过、必要文件齐全，未包含 node_modules、.git、.runtime 或密钥文件。独立解压后重新 `npm ci`，29 项测试和生产构建均通过；实际启动解压目录的构建产物，首页与原始组合 API 均通过烟测。
 - 原始数据核对：`data/portfolio.json` 与用户附件的 SHA256 一致；PLAN.md 与首次提交 fa5fb8c 一致。
 - 最终提交包：`output/portfolio-lab-submission.zip`；校验值在同目录 `SHA256SUMS.txt`，可运行 `npm run package` 重新生成。
+
+## 后续界面精简
+
+2026-11-11，按用户选择改为纯白＋蓝色：统一摘要布局、减少装饰、放大表格与输入文字，并轻量标记发生变化的持仓行。前后端规则、API 与持久化方式保持一致。
+
+调整后重新执行 `npm test`（29/29）、`npm run build` 和 `npm run verify:browser`（10 组检查），均通过；8 张截图已更新到实际新版，最近执行时间见 `docs/browser-verification.json`。额外检查 320～1440px 的 12 种宽度无页面级溢出；修复 320px 摘要数字单元溢出后，8 种宽度下的金额文字均在自身单元内。独立 UI 审阅无严重或重要问题。初始 PLAN.md 保留原版；后续设计选择见 `docs/UI-REFINEMENT.md`。此轮界面调整时间另计，不回写首次交付的约 32 分钟。
