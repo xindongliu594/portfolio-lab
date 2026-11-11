@@ -1,0 +1,22 @@
+{
+  "verifiedAt": "2026-11-11T02:20:03.141Z",
+  "node": "v24.15.0",
+  "browser": "156.0.8078.49",
+  "viewport": [
+    1440,
+    1100
+  ],
+  "checks": [
+    "AC-01: initial 100000/20000, 40%/60%, two warnings",
+    "AC-02: sell A01 100, cash 30000, equality removes both warnings",
+    "AC-03: then buy A02 100, cash 25000, industry 55%, two sequential operations",
+    "AC-04 UI: insufficient cash and zero/negative/fraction rejected; last valid simulation retained",
+    "Network failure: clear Chinese error, last valid operations and result retained",
+    "Unsaved draft: dismissing discard confirmation keeps operations",
+    "Failed save: draft retained and still editable, retry succeeds",
+    "AC-05 refresh: saved plan can be reopened with the same result",
+    "AC-05 restart: real production server restarted, persisted plan restored, original unchanged",
+    "390px viewport: no page-level horizontal overflow; table scroll is contained"
+  ],
+  "pageErrors": []
+}

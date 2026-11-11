@@ -1,0 +1,97 @@
+# 持仓研究室 · Portfolio Lab
+
+基于固定行情快照的投资组合分析与调仓模拟。完成 VC-FIN-001 / V3.0 的“查看组合 → 超限识别 → 顺序模拟 → 前后对比 → 保存与重开”。单用户、本地运行，人民币计价。
+
+![初始组合](docs/screenshots/01-initial-portfolio.png)
+
+## 环境与启动
+
+已验证：Windows、Node.js **24.15.0**、npm **11.12.1**、Chrome **156.0.8078.49**。要求 Node.js >=24.15.0（后端使用内置 `node:sqlite`）。无需安装独立数据库、申请 API Key 或设置环境密钥。
+
+在解压后的项目根目录打开终端：
+
+```powershell
+npm ci
+npm run build
+npm start
+```
+
+打开 **http://127.0.0.1:3000**。停止服务按 `Ctrl+C`。第一次启动会自动创建 `.runtime/plans.sqlite` 并初始化方案表；原始数据直接读取 `data/portfolio.json`，无须另执行导入命令。页面不需要联网读取字体、图片或行情，安装依赖时需要访问 npm 仓库。
+
+如 3000 端口已占用，在 PowerShell 中执行：
+
+```powershell
+$env:PORT = '3001'
+npm start
+```
+
+访问地址相应改为 http://127.0.0.1:3001。服务仅监听本机 127.0.0.1。
+
+## 演示与方案重开
+
+1. 初始总资产 **100,000.00**，现金 **20,000.00**；A01 占 **40.00%**，科技行业占 **60.00%**，出现两项集中度提醒。
+2. 在调仓模拟中选择 **A01 · 星河科技 → 卖出 → 100 股 → 添加到模拟**。现金变成 **30,000.00**；A01 **30.00%**、科技 **50.00%**，提醒均解除。
+3. 再选择 **A02 · 云帆软件 → 买入 → 100 股 → 添加到模拟**。现金变成 **25,000.00**，A02 **500 股**，科技 **55.00%**，行业提醒再次出现。
+4. 输入方案名称，点击 **保存方案**。页面进入已保存只读状态。
+5. 刷新页面，进入顶部 **已保存方案**，点击相应方案的 **重开方案**；也可停止并重新 `npm start` 后再按此步骤重开。
+6. 点击 **新建模拟** 回到原始组合；原始现金仍为 **20,000.00**、A01/A02 均为 **400 股**。
+
+未保存草稿仅存在当前页面内存中；刷新不承诺恢复，页面提供离开提醒。已保存方案仅查看，不提供编辑或删除。每个方案最多 100 笔操作；方案名去首尾空格后 1～60 个字符，允许重名，以唯一 ID 区分。空操作方案也可保存。
+
+## 开发与验证
+
+```powershell
+npm run dev
+```
+
+开发页面为 http://127.0.0.1:5173；API 为 http://127.0.0.1:3000。Vite 将 `/api` 代理给后端。`npm start` 使用构建产物，所以修改代码后需重新构建，或使用开发模式。
+
+```powershell
+npm test                 # 领域规则、真实 HTTP/SQLite 集成及 SSR 页面测试
+npm run build            # TypeScript 检查 + 前后端生产构建
+npm run verify:browser   # 独立 Chrome 会话，完整 UI 验收、真实重启、重建截图
+npm run package          # 生成 output/portfolio-lab-submission.zip
+```
+
+浏览器验收要求本机安装 Chrome，使用独立临时数据库和端口 **3117**，不会修改日常使用的 `.runtime/plans.sqlite`。需要改用已安装的 Edge 时：
+
+```powershell
+$env:BROWSER_CHANNEL = 'msedge'
+npm run verify:browser
+```
+
+其他系统可用 `BROWSER_CHANNEL=msedge npm run verify:browser`。本次实际验收平台为 Windows；其他操作系统未实测。验收脚本会更新 `docs/screenshots/` 和 `docs/browser-verification.json`。它模拟网络失败属于预期测试场景。
+
+## 项目结构
+
+```text
+client/           React 中文工作台、交互状态及样式
+server/           领域计算、Express API、SQLite 方案存储
+shared/           请求结果的共享类型
+data/portfolio.json  原始附件数据，作为只读输入
+tests/            Node.js 自动化测试
+scripts/          浏览器验收与提交打包
+docs/screenshots/ 实际验收截图
+PLAN.md           实现前原始方案（首次本地 Git 提交保留）
+DESIGN.md         最终设计、取舍、复盘和 AI 协作摘要
+VERIFY.md         验收步骤、结果与证据
+docs/DEMO.md      演示流程与技术讲解提示
+```
+
+数据库保存在 `.runtime/`，已被 Git 和提交打包脚本排除。重启恢复依赖保留该目录，迁移到另一台电脑时可单独备份数据库；源码包从空方案库开始。`PORTFOLIO_DB` 环境变量可指定数据库路径。请在项目根目录运行命令。
+
+## API 摘要
+
+| 方法 | 路径 | 用途 |
+|---|---|---|
+| GET | `/api/portfolio` | 原始组合、快照、估值和提醒 |
+| POST | `/api/simulate` | `{operations}`，从原始组合按顺序重放 |
+| POST | `/api/plans` | `{name, operations}`，重新校验后保存 |
+| GET | `/api/plans` | 已保存方案列表 |
+| GET | `/api/plans/:id` | 用保存时的快照重算方案 |
+
+操作示例：`{"symbol":"A01","side":"sell","quantity":100}`。金额返回十进制字符串，数量为整数，百分比显示两位小数，是否超限以后端结果为准。错误统一为 `{error:{code,message,operationIndex?}}`，操作索引从 0 开始。
+
+## 提交说明
+
+交付材料含源码、锁文件、初始化数据、设计材料、AI 协作记录、验证记录和截图。实际投入时间与未完成项见 [VERIFY.md](VERIFY.md)，演示讲解见 [docs/DEMO.md](docs/DEMO.md)。提交渠道和截止时间以招聘方通知为准。
