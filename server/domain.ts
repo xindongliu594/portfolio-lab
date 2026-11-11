@@ -11,7 +11,7 @@ function safe(value: number): number {
   return value;
 }
 
-function cents(value: string): number {
+export function cents(value: string): number {
   if (typeof value !== 'string' || !/^\d+(?:\.\d{1,2})?$/.test(value)) {
     throw new DomainError('INVALID_PRICE', '金额必须是非负且最多两位小数的十进制字符串。');
   }

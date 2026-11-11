@@ -1,33 +1,23 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import type { Analysis, ApiError, Operation, PlanDetail, PlanSummary, PortfolioResponse, Simulation } from '../shared/types.js';
+import type { Analysis, Operation, PlanDetail, PlanSummary, PortfolioResponse, Simulation, Snapshot } from '../shared/types.js';
 import { money } from './format.js';
 import { CalculationDetails, StepTimeline, TradeImpact } from './StepInsights.js';
+import AiAssistant from './AiAssistant.js';
+import { request } from './api.js';
 
 const time = (value: string) => new Intl.DateTimeFormat('zh-CN', {
   timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
 }).format(new Date(value));
 const colors = ['#3262d6', '#6387cd', '#8da8d5', '#acbedc', '#c5d2e8'];
 
-function Icon({ name }: { name: 'chart' | 'folder' | 'plus' | 'arrow' | 'save' | 'reset' | 'check' | 'alert' }) {
+function Icon({ name }: { name: 'chart' | 'folder' | 'plus' | 'arrow' | 'save' | 'reset' | 'check' | 'alert' | 'chat' }) {
   const paths = {
     chart: 'M4 19h16M7 15v-4m5 4V5m5 10V8', folder: 'M3 7h7l2 2h9v10H3V7zm0 0V4h7l2 3',
     plus: 'M12 5v14M5 12h14', arrow: 'M5 12h14m-5-5 5 5-5 5', save: 'M5 3h12l3 3v15H4V3h1zm3 0v6h8V3M8 21v-8h8v8',
     reset: 'M4 10a8 8 0 1 1 1 8M4 4v6h6', check: 'm5 12 4 4L19 6', alert: 'M12 8v5m0 4h.01M12 3 2 21h20L12 3z',
+    chat: 'M4 4h16v12H9l-5 4V4zm4 4h8m-8 4h5',
   };
   return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[name]} /></svg>;
-}
-
-async function request<T>(path: string, body?: unknown): Promise<T> {
-  const response = await fetch(`/api${path}`, body === undefined ? {} : {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-  }).catch(() => { throw new Error('无法连接本地服务，请确认服务已启动后重试；当前模拟结果已保留。'); });
-  const data = await response.json().catch(() => { throw new Error('服务返回了无法识别的数据，请稍后重试；当前模拟结果已保留。'); });
-  if (!response.ok) {
-    const detail = (data as ApiError).error;
-    const prefix = detail.operationIndex === undefined ? '' : `第 ${detail.operationIndex + 1} 笔操作：`;
-    throw new Error(prefix + (detail.message || '请求失败，请稍后重试。'));
-  }
-  return data as T;
 }
 
 function ErrorBox({ message }: { message: string }) {
@@ -64,8 +54,10 @@ export default function App({ initial }: { initial?: PortfolioResponse }) {
   const [portfolio, setPortfolio] = useState<PortfolioResponse | null>(initial ?? null);
   const [simulation, setSimulation] = useState<Simulation | null>(null);
   const [activePlan, setActivePlan] = useState<PlanDetail | null>(null);
+  const [draftSourcePlanId, setDraftSourcePlanId] = useState<string | null>(null);
+  const [draftSnapshot, setDraftSnapshot] = useState<Snapshot | null>(null);
   const [plans, setPlans] = useState<PlanSummary[]>([]);
-  const [tab, setTab] = useState<'workspace' | 'plans'>('workspace');
+  const [tab, setTab] = useState<'workspace' | 'plans' | 'assistant'>('workspace');
   const [busy, setBusy] = useState('');
   const [loadError, setLoadError] = useState('');
   const [plansError, setPlansError] = useState('');
@@ -103,7 +95,7 @@ export default function App({ initial }: { initial?: PortfolioResponse }) {
   function canLeave() { return !dirty || window.confirm('当前模拟尚未保存，继续将放弃这些操作。是否继续？'); }
   function newDraft() {
     if (!canLeave()) return;
-    setSimulation(null); setActivePlan(null); setSelectedStep(null); setName(''); setTradeError(''); setSaveError(''); setNotice(''); setTab('workspace');
+    setSimulation(null); setActivePlan(null); setDraftSourcePlanId(null); setDraftSnapshot(null); setSelectedStep(null); setName(''); setTradeError(''); setSaveError(''); setNotice(''); setTab('workspace');
   }
   async function refreshPlans() {
     setPlansError('');
@@ -116,7 +108,7 @@ export default function App({ initial }: { initial?: PortfolioResponse }) {
     }
     setBusy('simulate');
     try {
-      const result = await request<Simulation>('/simulate', { operations: [...operations, { symbol, side, quantity: Number(quantity) }] });
+      const result = await request<Simulation>('/simulate', { operations: [...operations, { symbol, side, quantity: Number(quantity) }], ...(draftSourcePlanId ? { sourcePlanId: draftSourcePlanId } : {}) });
       setSimulation(result); setSelectedStep(null); setNotice(`第 ${result.operations.length} 笔操作已加入，模拟结果已更新。`);
     } catch (error) { setTradeError(error instanceof Error ? error.message : '操作失败，请重试。'); }
     finally { setBusy(''); }
@@ -126,8 +118,8 @@ export default function App({ initial }: { initial?: PortfolioResponse }) {
     if (!name.trim() || [...name.trim()].length > 60) { setSaveError('请输入 1～60 个字符的方案名称。'); return; }
     setBusy('save');
     try {
-      const saved = await request<PlanDetail>('/plans', { name, operations });
-      setActivePlan(saved); setSimulation(saved); setSelectedStep(null); setName(saved.name); setNotice(`“${saved.name}”已保存，刷新或重启后仍可重开。`);
+      const saved = await request<PlanDetail>('/plans', { name, operations, ...(draftSourcePlanId ? { sourcePlanId: draftSourcePlanId } : {}) });
+      setActivePlan(saved); setDraftSourcePlanId(null); setDraftSnapshot(null); setSimulation(saved); setSelectedStep(null); setName(saved.name); setNotice(`“${saved.name}”已保存，刷新或重启后仍可重开。`);
       await refreshPlans();
     } catch (error) { setSaveError(error instanceof Error ? error.message : '保存失败，请重试。'); }
     finally { setBusy(''); }
@@ -137,22 +129,30 @@ export default function App({ initial }: { initial?: PortfolioResponse }) {
     setBusy('open'); setPlansError('');
     try {
       const plan = await request<PlanDetail>(`/plans/${encodeURIComponent(id)}`);
-      setActivePlan(plan); setSimulation(plan); setSelectedStep(null); setName(plan.name); setTradeError(''); setSaveError(''); setNotice('已按保存时的行情快照重新计算此方案。'); setTab('workspace');
+      setActivePlan(plan); setDraftSourcePlanId(null); setDraftSnapshot(null); setSimulation(plan); setSelectedStep(null); setName(plan.name); setTradeError(''); setSaveError(''); setNotice('已按保存时的行情快照重新计算此方案。'); setTab('workspace');
     } catch (error) { setPlansError(error instanceof Error ? error.message : '重开失败，请重试。'); }
     finally { setBusy(''); }
+  }
+  function adoptAssistantDraft(result: Simulation) {
+    if (historical && dirty && !canLeave()) return;
+    setDraftSourcePlanId(activePlan?.id ?? draftSourcePlanId);
+    setDraftSnapshot(activePlan?.snapshot ?? draftSnapshot);
+    setSimulation(result); setActivePlan(null); setSelectedStep(null); setName(''); setTradeError(''); setSaveError('');
+    setNotice('已采用演示草案，当前为未保存的新模拟。'); setTab('workspace');
   }
 
   const original = simulation?.original ?? portfolio?.analysis;
   const latest = simulation?.simulated ?? portfolio?.analysis;
   const current = selectedIndex === 0 ? original : viewedStep?.analysis ?? latest;
-  const snapshot = activePlan?.snapshot ?? portfolio?.snapshot;
+  const snapshot = activePlan?.snapshot ?? draftSnapshot ?? portfolio?.snapshot;
   const selected = latest?.positions.find(p => p.symbol === symbol);
   const compared = selectedIndex > 0;
+  const assistantContext = { operations, stepIndex: selectedIndex, ...(activePlan ? { planId: activePlan.id } : draftSourcePlanId ? { sourcePlanId: draftSourcePlanId } : {}) };
 
   return <div className="app-shell">
     <header className="app-header"><div className="header-inner">
       <a href="/" className="brand" onClick={e => { e.preventDefault(); setTab('workspace'); }}><span className="brand-icon"><Icon name="chart" /></span><span>持仓研究室<small>PORTFOLIO LAB</small></span></a>
-      <nav aria-label="主导航"><button disabled={!!busy} className={tab === 'workspace' ? 'nav-active' : ''} onClick={() => setTab('workspace')}><Icon name="chart" />组合分析</button><button disabled={!!busy} className={tab === 'plans' ? 'nav-active' : ''} onClick={() => setTab('plans')}><Icon name="folder" />已保存方案<span className="nav-count">{plans.length}</span></button></nav>
+      <nav aria-label="主导航"><button disabled={!!busy} className={tab === 'workspace' ? 'nav-active' : ''} onClick={() => setTab('workspace')}><Icon name="chart" />组合分析</button><button disabled={!!busy} className={tab === 'assistant' ? 'nav-active' : ''} onClick={() => setTab('assistant')}><Icon name="chat" />AI 助手</button><button disabled={!!busy} className={tab === 'plans' ? 'nav-active' : ''} onClick={() => setTab('plans')}><Icon name="folder" />已保存方案<span className="nav-count">{plans.length}</span></button></nav>
       <div className="local-status"><span />本地工作台</div>
     </div></header>
 
@@ -160,15 +160,17 @@ export default function App({ initial }: { initial?: PortfolioResponse }) {
       {!portfolio || !current || !original || !snapshot ? <section className="panel loading-panel" role="status">
         {loadError ? <><ErrorBox message={loadError} /><button className="primary" onClick={() => window.location.reload()}>重新连接</button></> : <><span className="spinner" />正在载入投资组合…</>}
       </section> : <>
-        <div className="breadcrumb">研究工作台<span>/</span>{tab === 'workspace' ? '组合分析' : '方案管理'}</div>
-        <div className="page-heading"><div><h1>{tab === 'workspace' ? '投资组合分析' : '已保存方案'}</h1><p>{tab === 'workspace' ? '基于固定行情，查看集中度并对比调仓前后的变化。' : '查看保存在本机的调仓方案，重开并复核模拟结果。'}</p></div><button className="secondary" disabled={!!busy} onClick={newDraft}><Icon name="plus" />新建模拟</button></div>
+        <div className="breadcrumb">研究工作台<span>/</span>{tab === 'workspace' ? '组合分析' : tab === 'assistant' ? 'AI 助手' : '方案管理'}</div>
+        <div className="page-heading"><div><h1>{tab === 'workspace' ? '投资组合分析' : tab === 'assistant' ? 'AI 助手' : '已保存方案'}</h1><p>{tab === 'workspace' ? '基于固定行情，查看集中度并对比调仓前后的变化。' : tab === 'assistant' ? '把组合数据变成可理解的解读，并预览可验证的调仓草案。' : '查看保存在本机的调仓方案，重开并复核模拟结果。'}</p></div><button className="secondary" disabled={!!busy} onClick={newDraft}><Icon name="plus" />新建模拟</button></div>
+        <div hidden={tab !== 'assistant'}><AiAssistant key={JSON.stringify(assistantContext)} context={assistantContext} analysis={current} sourceName={activePlan?.name ?? snapshot.name} snapshotId={snapshot.snapshot_id} onAdopt={adoptAssistantDraft} /></div>
 
         {tab === 'plans' ? <section className="panel plans-panel">
           <div className="section-heading"><div><h2>方案档案 <span className="subtle-count">{plans.length}</span></h2><p>保存在本机，可在刷新页面和重启服务后重新打开。</p></div><button className="text-button" onClick={refreshPlans} disabled={!!busy}>刷新列表</button></div>
           <ErrorBox message={plansError} />
           {!plans.length ? <div className="empty-state"><span className="empty-icon"><Icon name="folder" /></span><h3>还没有保存的方案</h3><p>完成模拟后，为方案命名并保存，就能在这里重新打开。</p><button className="secondary" onClick={() => setTab('workspace')}>开始模拟<Icon name="arrow" /></button></div> : <div className="plan-grid">{plans.map(plan => <article className="plan-card" key={plan.id}><div className="plan-card-top"><span className="file-icon"><Icon name="folder" /></span><span className="status-tag">已保存</span></div><h3>{plan.name}</h3><p>{plan.operationCount} 笔操作 <span>·</span> {plan.snapshotId}</p><div className="plan-card-bottom"><small>{time(plan.createdAt)}</small><button className="text-button" disabled={!!busy} onClick={() => openPlan(plan.id)}>重开方案<Icon name="arrow" /></button></div></article>)}</div>}
-        </section> : <>
+        </section> : tab === 'assistant' ? null : <>
           <div className="snapshot-line"><span className="snapshot-name">{snapshot.name}<span className="portfolio-id">{snapshot.portfolio_id}</span></span><span><span className="snapshot-dot" />固定行情快照 <time>{time(snapshot.snapshot_at)}（北京时间）</time></span><span className="currency-label">CNY / 人民币</span></div>
+          {draftSourcePlanId && <div className="saved-banner">新草稿沿用来源方案快照：{snapshot.snapshot_id}，来源方案保持不变。</div>}
           {historical && <div className="history-banner" role="status"><div><strong>{selectedIndex === 0 ? '正在回看原始组合' : `正在回看第 ${selectedIndex} 步`}</strong><span>共 {steps.length} 笔操作，完整方案保持不变。</span></div><button className="text-button" disabled={!!busy} onClick={() => setSelectedStep(null)}>回到最新结果<Icon name="arrow" /></button></div>}
           <section className="stats-grid" aria-label="资产摘要">
             <article className="stat-card main-stat"><div className="stat-label">组合总资产 <span>人民币</span></div><div className="stat-value"><small>¥</small>{money(current.totalAssets)}</div><p>{compared ? '模拟前后总资产不变' : '股票市值 + 现金余额'}<span className="tiny-dot" />固定价格 / 无费用</p></article>

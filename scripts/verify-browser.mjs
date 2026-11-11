@@ -1,7 +1,7 @@
 import { chromium, expect } from '@playwright/test';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 
 const root = resolve('.');
@@ -15,9 +15,9 @@ let service;
 let browser;
 const checks = [];
 const consoleErrors = [];
-async function start() {
+async function start(workdir = root) {
   service = spawn(process.execPath, ['dist/server/server/index.js'], {
-    cwd: root, env: { ...process.env, PORT: String(port), PORTFOLIO_DB: join(scratch, 'plans.sqlite') },
+    cwd: workdir, env: { ...process.env, PORT: String(port), PORTFOLIO_DB: join(scratch, 'plans.sqlite') },
     windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
   });
   let output = '';
@@ -184,11 +184,132 @@ try {
     checks.push('Continue after replay: third trade starts from latest state, cash 25000 to 24000');
   } finally { await continuation.close(); }
 
+  const ai = await browser.newPage({ viewport: { width: 1440, height: 1050 } });
+  ai.on('dialog', dialog => dialog.accept());
+  ai.on('pageerror', error => consoleErrors.push(error.message));
+  try {
+    await ai.goto(url);
+    await expect(ai.getByRole('button', { name: 'AI 助手', exact: true })).toBeVisible({ timeout: 3000 });
+    await ai.getByRole('button', { name: 'AI 助手', exact: true }).click();
+    await expect(ai.locator('.demo-mode-banner')).toContainText('本地规则生成');
+    await expect(ai.locator('.demo-mode-banner')).toContainText('未接入真实模型');
+    await ai.getByRole('button', { name: '生成演示建议', exact: true }).click();
+    await expect(ai.locator('.assistant-draft')).toContainText('30,000.00');
+    await expect(ai.locator('.assistant-draft')).toContainText('100 股');
+    await ai.getByRole('button', { name: '现金和总资产怎么算？', exact: true }).click();
+    await expect(ai.locator('.chat-message.assistant')).toHaveCount(1);
+    await expect(ai.locator('.chat-message.assistant').last()).toContainText('20000.00');
+    for (const followup of ['继续说呢', '具体点呢', '然后呢']) {
+      await ai.getByLabel('输入你的问题', { exact: true }).fill(followup);
+      await ai.getByRole('button', { name: '发送', exact: true }).click();
+      await expect(ai.getByLabel('输入你的问题', { exact: true })).toHaveValue('');
+      await expect(ai.locator('.chat-message.assistant').last()).toContainText('20000.00');
+    }
+    await ai.getByLabel('输入你的问题', { exact: true }).fill('为什么呢？');
+    await ai.getByRole('button', { name: '发送', exact: true }).click();
+    await expect(ai.locator('.chat-message.assistant')).toHaveCount(5);
+    await expect(ai.locator('.chat-message.assistant').last()).toContainText('20000.00');
+    await ai.getByRole('button', { name: '组合分析', exact: true }).click();
+    await ai.getByRole('button', { name: 'AI 助手', exact: true }).click();
+    await expect(ai.locator('.chat-message.assistant')).toHaveCount(5);
+    await ai.route('**/api/assistant/chat', route => route.abort());
+    await ai.getByLabel('输入你的问题', { exact: true }).fill('当前有哪些超限？');
+    await ai.getByRole('button', { name: '发送', exact: true }).click();
+    await expect(ai.locator('.assistant-chat [role="alert"]')).toContainText('无法连接');
+    await expect(ai.locator('.chat-message.assistant')).toHaveCount(5);
+    await ai.unroute('**/api/assistant/chat');
+    await ai.getByRole('button', { name: '发送', exact: true }).click();
+    await expect(ai.locator('.chat-message.assistant')).toHaveCount(6);
+    await screenshot(ai, '10-demo-ai-assistant.png');
+    await ai.setViewportSize({ width: 390, height: 844 });
+    expect(await ai.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await screenshot(ai, '11-demo-ai-mobile.png');
+    await ai.setViewportSize({ width: 1440, height: 1050 });
+    checks.push('Demo chat: explicit local-demo label, multi-turn follow-up, navigation retention, network failure and retry');
+    checks.push('Demo assistant mobile: suggestion and chat layout fits 390px');
+    await ai.getByRole('button', { name: '采用为新模拟', exact: true }).click();
+    await expect(ai.locator('.operation-list li')).toHaveCount(1);
+    await expect(ai.locator('.simulation-summary')).toContainText('30,000.00');
+    await expect(ai.locator('.risk-banner')).toContainText('无集中度超限');
+    checks.push('Demo advice: backend-validated sell draft adopted only by explicit click');
+    await ai.getByRole('button', { name: 'AI 助手', exact: true }).click();
+    await expect(ai.locator('.chat-message')).toHaveCount(0);
+    await ai.getByRole('button', { name: '生成演示建议', exact: true }).click();
+    await expect(ai.locator('.assistant-advice')).toContainText('没有集中度超限');
+    await expect(ai.getByRole('button', { name: '采用为新模拟', exact: true })).toHaveCount(0);
+    await ai.getByRole('button', { name: '组合分析', exact: true }).click();
+    await ai.getByLabel('交易标的', { exact: true }).selectOption('A02');
+    await ai.getByRole('button', { name: '＋ 买入', exact: true }).click();
+    await ai.getByRole('button', { name: '添加到模拟', exact: true }).click();
+    await expect(ai.locator('.operation-list li')).toHaveCount(2);
+    await ai.getByRole('button', { name: '查看原始组合', exact: true }).click();
+    await ai.getByRole('button', { name: 'AI 助手', exact: true }).click();
+    await ai.getByRole('button', { name: '生成演示建议', exact: true }).click();
+    ai.removeAllListeners('dialog'); ai.once('dialog', dialog => dialog.dismiss());
+    await ai.getByRole('button', { name: '采用为新模拟', exact: true }).click();
+    await expect(ai.getByRole('heading', { name: 'AI 助手', exact: true })).toBeVisible();
+    await ai.getByRole('button', { name: '组合分析', exact: true }).click();
+    await expect(ai.locator('.operation-list li')).toHaveCount(2);
+    await ai.getByRole('button', { name: 'AI 助手', exact: true }).click();
+    ai.on('dialog', dialog => dialog.accept());
+    await ai.getByRole('button', { name: '采用为新模拟', exact: true }).click();
+    await expect(ai.locator('.operation-list li')).toHaveCount(1);
+    checks.push('Demo context: data change resets chat; no needless trades; historical adoption protects later unsaved operations');
+    await ai.getByLabel('保存当前方案', { exact: true }).fill('演示助手草案');
+    await ai.getByRole('button', { name: '保存方案', exact: true }).click();
+    await expect(ai.locator('.saved-banner')).toContainText('演示助手草案');
+    await ai.reload();
+    await ai.getByRole('button', { name: /已保存方案/ }).click();
+    await ai.locator('.plan-card').filter({ hasText: '演示助手草案' }).getByRole('button', { name: '重开方案', exact: true }).click();
+    await expect(ai.locator('.simulation-summary')).toContainText('30,000.00');
+    checks.push('Demo draft persistence: adopted draft can be named, saved and reopened normally');
+  } finally { await ai.close(); }
+
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await expect(page.getByRole('heading', { name: '投资组合分析', exact: true })).toBeVisible();
   await screenshot(page, '08-mobile.png');
   checks.push('390px viewport: no page-level horizontal overflow; table scroll is contained');
+
+  await stop();
+  await cp(join(root, 'dist'), join(scratch, 'dist'), { recursive: true });
+  await mkdir(join(scratch, 'data'), { recursive: true });
+  const changedSnapshot = JSON.parse(await readFile(join(root, 'data/portfolio.json'), 'utf8'));
+  changedSnapshot.snapshot_id = 'NEW-SNAPSHOT'; changedSnapshot.cash = '1.00'; changedSnapshot.instruments[0].price = '999.00';
+  await writeFile(join(scratch, 'data/portfolio.json'), JSON.stringify(changedSnapshot));
+  await start(scratch);
+  const branch = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  branch.on('pageerror', error => consoleErrors.push(error.message)); branch.on('dialog', dialog => dialog.accept());
+  try {
+    await branch.goto(url);
+    await branch.getByRole('button', { name: /已保存方案/ }).click();
+    await branch.locator('.plan-card').filter({ hasText: '科技行业调仓 · 验收方案' }).getByRole('button', { name: '重开方案', exact: true }).click();
+    await branch.getByRole('button', { name: 'AI 助手', exact: true }).click();
+    await branch.getByRole('button', { name: '生成演示建议', exact: true }).click();
+    await expect(branch.locator('.assistant-draft')).toContainText('30,000.00');
+    await branch.getByRole('button', { name: '采用为新模拟', exact: true }).click();
+    await expect(branch.locator('.main-stat')).toContainText('100,000.00');
+    await expect(branch.locator('.saved-banner')).toContainText('SNAP-20261102');
+    await branch.getByLabel('交易标的', { exact: true }).selectOption('A03');
+    await branch.getByRole('button', { name: '＋ 买入', exact: true }).click();
+    await branch.getByLabel('交易数量', { exact: true }).fill('10');
+    await branch.getByRole('button', { name: '添加到模拟', exact: true }).click();
+    await expect(branch.locator('.simulation-summary')).toContainText('29,000.00');
+    await branch.getByRole('button', { name: 'AI 助手', exact: true }).click();
+    await branch.getByRole('button', { name: '现金和总资产怎么算？', exact: true }).click();
+    await expect(branch.locator('.chat-message.assistant').last()).toContainText('29000.00');
+    await expect(branch.locator('.assistant-context')).toContainText('SNAP-20261102');
+    await branch.getByRole('button', { name: '组合分析', exact: true }).click();
+    await branch.getByLabel('保存当前方案', { exact: true }).fill('旧快照分支');
+    await branch.getByRole('button', { name: '保存方案', exact: true }).click();
+    await branch.reload();
+    await branch.getByRole('button', { name: /已保存方案/ }).click();
+    await branch.locator('.plan-card').filter({ hasText: '旧快照分支' }).getByRole('button', { name: '重开方案', exact: true }).click();
+    await expect(branch.locator('.simulation-summary')).toContainText('29,000.00');
+    await expect(branch.locator('.main-stat')).toContainText('100,000.00');
+    expect((await (await fetch(url + '/api/portfolio')).json()).snapshot.snapshot_id).toBe('NEW-SNAPSHOT');
+    checks.push('Saved-snapshot branch: old-plan adoption, more trades, chat, save and reopen retain old snapshot despite changed seed');
+  } finally { await branch.close(); }
   expect(consoleErrors).toEqual([]);
   const report = { verifiedAt: new Date().toISOString(), node: process.version, browser: await browser.version(), viewport: [1440, 1100], checks, pageErrors: consoleErrors };
   await writeFile(resolve('docs/browser-verification.json'), JSON.stringify(report, null, 2) + '\n');

@@ -128,3 +128,47 @@ test('real SQLite write failure is reported without changing simulation or origi
     assert.equal((await api.request('/api/portfolio')).body.analysis.cash, '20000.00');
   } finally { await api.close(); }
 });
+
+test('demo assistant HTTP exposes honest mode, authoritative context, chat and errors without persisting', async () => {
+  const api = await start();
+  try {
+    const context = { operations: [], stepIndex: 0, analysis: { cash: '999999.00' } };
+    const advice = await api.request('/api/assistant/advice', { context });
+    assert.equal(advice.status, 200);
+    assert.equal(advice.body.mode, 'demo');
+    assert.equal(advice.body.context.analysis.cash, '20000.00');
+    assert.equal(advice.body.draft.simulation.simulated.cash, '30000.00');
+    const chat = await api.request('/api/assistant/chat', { context, question: '现金和总资产怎么算？', history: [] });
+    assert.equal(chat.status, 200);
+    assert.equal(chat.body.mode, 'demo');
+    assert.match(chat.body.reply, /20000\.00/);
+    assert.equal((await api.request('/api/assistant/advice', { context: { operations, stepIndex: 1 } })).body.draft, null);
+    assert.equal((await api.request('/api/assistant/advice', { context: { planId: 'missing', stepIndex: 0 } })).status, 404);
+    assert.equal((await api.request('/api/assistant/chat', { context, question: '', history: [] })).status, 422);
+    assert.equal((await api.request('/api/assistant/chat', { context, question: 'test', history: null })).status, 422);
+    assert.deepEqual((await api.request('/api/plans')).body, []);
+    assert.equal((await api.request('/api/portfolio')).body.analysis.cash, '20000.00');
+  } finally { await api.close(); }
+});
+
+test('adopted saved-plan draft keeps old snapshot for simulate, save and assistant after source data changes', async () => {
+  const changed = structuredClone(snapshot); changed.snapshot_id = 'NEW'; changed.cash = '1.00'; changed.instruments[0].price = '999.00';
+  const api = await start(':memory:', changed);
+  try {
+    const originalPlan = api.store.save('old source', snapshot, []);
+    const advice = await api.request('/api/assistant/advice', { context: { planId: originalPlan.id, stepIndex: 0 } });
+    const operations = advice.body.draft.simulation.operations;
+    const simulation = await api.request('/api/simulate', { sourcePlanId: originalPlan.id, operations });
+    assert.equal(simulation.body.simulated.cash, '30000.00');
+    assert.equal(simulation.body.simulated.totalAssets, '100000.00');
+    const saved = await api.request('/api/plans', { sourcePlanId: originalPlan.id, name: 'new draft', operations });
+    assert.equal(saved.body.snapshot.snapshot_id, 'SNAP-20261102');
+    assert.equal(saved.body.simulated.cash, '30000.00');
+    const chat = await api.request('/api/assistant/chat', { context: { sourcePlanId: originalPlan.id, operations, stepIndex: 1 }, question: '现金多少？', history: [] });
+    assert.equal(chat.body.context.snapshotId, 'SNAP-20261102');
+    assert.match(chat.body.reply, /30000\.00/);
+    assert.equal((await api.request('/api/simulate', { sourcePlanId: 'missing', operations: [] })).status, 404);
+    assert.equal((await api.request('/api/simulate', { sourcePlanId: 42, operations: [] })).status, 422);
+    assert.equal((await api.request('/api/portfolio')).body.snapshot.snapshot_id, 'NEW');
+  } finally { await api.close(); }
+});

@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import App from '../client/App.js';
 import { analyze, simulate } from '../server/domain.js';
 import { TradeImpact, StepTimeline, CalculationDetails } from '../client/StepInsights.js';
+import AiAssistant from '../client/AiAssistant.js';
 import type { Snapshot } from '../shared/types.js';
 
 test('workspace presents the supplied portfolio, trading form and initial empty state', () => {
@@ -55,4 +56,17 @@ test('calculation disclosure shows selected analysis values with cash denominato
   assert.match(text, /30,000\.00 ÷ 100,000\.00/);
   assert.match(text, /现金计入总资产/);
   assert.match(text, /严格大于/);
+});
+
+test('assistant UI clearly labels demo mode and provides suggestion and conversation controls', () => {
+  const html = renderToStaticMarkup(createElement(AiAssistant, { context: { operations: [], stepIndex: 0 }, analysis: analyze(snapshot), sourceName: '演示组合', snapshotId: snapshot.snapshot_id, onAdopt: () => {} }));
+  const text = html.replace(/<[^>]+>/g, '');
+  assert.match(text, /演示模式/);
+  assert.match(text, /本地规则生成/);
+  assert.match(text, /未接入真实模型/);
+  assert.match(text, /辅助建议/);
+  assert.match(text, /对话问答/);
+  assert.match(text, /100,000\.00/);
+  assert.match(html, /textarea/);
+  assert.match(text, /生成演示建议/);
 });

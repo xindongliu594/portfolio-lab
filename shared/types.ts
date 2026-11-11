@@ -37,3 +37,11 @@ export interface PortfolioResponse { snapshot: Snapshot; analysis: Analysis }
 export interface PlanSummary { id: string; name: string; createdAt: string; operationCount: number; snapshotId: string }
 export interface PlanDetail extends PlanSummary, Simulation { snapshot: Snapshot }
 export interface ApiError { error: { code: string; message: string; operationIndex?: number } }
+export interface AssistantContextInput { operations: Operation[]; stepIndex: number; planId?: string; sourcePlanId?: string }
+export interface AssistantContextSummary { snapshotId: string; snapshotAt: string; stepIndex: number; operationCount: number; analysis: Analysis }
+export interface DemoAdvice {
+  mode: 'demo'; context: AssistantContextSummary; summary: string; observations: string[]; suggestion: string;
+  draft: { title: string; addedOperations: Operation[]; simulation: Simulation } | null;
+}
+export interface ChatMessage { role: 'user' | 'assistant'; content: string }
+export interface DemoReply { mode: 'demo'; context: AssistantContextSummary; topic: 'cash' | 'alerts' | 'rule' | 'step' | 'draft' | 'scope' | 'overview'; reply: string }

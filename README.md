@@ -48,6 +48,18 @@ npm start
 
 ![逐步回看与计算依据](docs/screenshots/09-step-replay-and-basis.png)
 
+## AI 助手演示
+
+顶部进入 **AI 助手**，包含“辅助建议”和“对话问答”。本版明确标识 **演示模式 · 本地规则生成，未接入真实模型**。无需 API Key、联网或模型服务，不产生模型调用费用。
+
+1. 点击“生成演示建议”，读取当前组合/回看步骤的后端分析；原始组合会生成卖 A01 100 股的演示草案，并显示验算后的现金 30000、超限0项。
+2. 草案只演示把集中度超限部分转为现金。先处理单标的超限，再按行业内当前市值较大者处理行业超限；不做收益预测，也不宣称这是最优投资策略。
+3. 点击“采用为新模拟”进入可编辑草稿，之后按原有方式命名保存。不会自动保存或修改已保存方案；历史步骤会替换未保存后续操作时先确认。
+4. 点击快捷问题或输入问题，支持集中度、现金、阈值、步骤变化和调仓思路。可继续追问，例如先问“现金和总资产怎么算”，再问“为什么呢”。这是一组限定主题的规则回复，不是通用大模型聊天。
+5. 相同上下文切换导航会保留对话；改变操作、步骤或保存方案后开始新会话，避免旧上下文混用。聊天不持久化，刷新后清空。
+
+![演示建议与对话](docs/screenshots/10-demo-ai-assistant.png)
+
 ## 开发与验证
 
 ```powershell
@@ -99,10 +111,16 @@ docs/DEMO.md      演示流程与技术讲解提示
 | POST | `/api/plans` | `{name, operations}`，重新校验后保存 |
 | GET | `/api/plans` | 已保存方案列表 |
 | GET | `/api/plans/:id` | 用保存时的快照重算方案 |
+| POST | `/api/assistant/advice` | `{context}` → 明确标识demo的组合解读和验算草案 |
+| POST | `/api/assistant/chat` | `{context, question, history}` → 本地规则回复 |
 
 操作示例：`{"symbol":"A01","side":"sell","quantity":100}`。金额返回十进制字符串，数量为整数，百分比显示两位小数，是否超限以后端结果为准。错误统一为 `{error:{code,message,operationIndex?}}`，操作索引从 0 开始。
 
 模拟与方案详情额外返回 `steps`：每步含 1 开始的 `index`、`operation`、该步 `analysis` 和结构化 `impact`（交易金额、现金/标的/行业前后值、`resolvedAlerts`、`triggeredAlerts`）。`simulated` 始终是最终结果，回看选择只存在前端。
+
+助手context为 `{operations, stepIndex, planId?, sourcePlanId?}`。planId表示查看已保存方案，使用其快照及操作；sourcePlanId表示从保存方案派生的草稿，仅使用其可信快照，并重放当前操作；两者互斥。由保存方案采用的草案会保留来源，后续 `/api/simulate` 和 `/api/plans` 也携带 sourcePlanId，保证预览、继续交易和保存一致。后端忽略前端伪造估值。
+
+question上限1000字符，history最多6条user/assistant消息，每条1000字符以内；可选topic为受验证的话题枚举，用于延续超出历史窗口的简短追问，不包含余额等事实。返回 `mode: "demo"`，不包含真实模型调用。后续接真实模型时可替换规则生成部分，保留上下文重算、草案校验和用户采用流程。
 
 ## 提交说明
 
