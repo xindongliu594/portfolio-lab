@@ -26,25 +26,25 @@
 ### Task 1: 规则与类型
 **Files:** shared/types.ts、server/domain.ts、tests/domain.test.ts、data/portfolio.json、package.json、tsconfig.json。
 **Interfaces:** `simulate(snapshot: Snapshot, input: unknown): Simulation`；`analyze(snapshot: Snapshot): Analysis`。金额十进制字符串，比例字符串，超限以后端布尔值为准。
-- [ ] 配置依赖/锁文件，复制原始附件数据，编写 AC-01～AC-04、输入类型、溢出、批次原子性及未舍入阈值测试。
-- [ ] 运行 `npm test` 确认尚无实现导致失败；实现领域计算，再运行至全绿。
+- [x] 配置依赖/锁文件，复制原始附件数据，编写 AC-01～AC-04、输入类型、溢出、批次原子性及未舍入阈值测试。
+- [x] 运行 `npm test` 确认尚无实现导致失败；实现领域计算，再运行至全绿。
 
 ### Task 2: API 与持久化
 **Files:** server/store.ts、server/app.ts、server/index.ts、tests/api.test.ts。
 **Interfaces:** `createApp({snapshot, store, staticDir?})`；`PlanStore(path)` 保存快照及操作；五个 API 按 spec，统一错误结构。
-- [ ] 写实际 HTTP/SQLite 测试：AC-05、404、非法 JSON、命名、空操作、超限数量、错误不保存、关闭重开数据库、快照隔离及存储失败。
-- [ ] 红灯后实现 API/SQLite；运行 `npm test`。
+- [x] 写实际 HTTP/SQLite 测试：AC-05、404、非法 JSON、命名、空操作、超限数量、错误不保存、关闭重开数据库、快照隔离及存储失败。
+- [x] 红灯后实现 API/SQLite；运行 `npm test`。
 
 ### Task 3: 中文工作台
 **Files:** client/App.tsx、client/main.tsx、client/styles.css、index.html、vite.config.ts、tests/ui.test.tsx。
 **Interfaces:** 使用共享响应类型；有效操作仅在模拟成功后更新；保存方案为只读。
-- [ ] 写 SSR 页面断言覆盖组合和操作表单、空状态；红灯后实现界面。
-- [ ] 提供加载/错误/空方案状态、未保存提醒、金额格式、桌面与窄屏排布。
-- [ ] `npm test`、`npm run build` 通过；浏览器按 AC-01～AC-05 操作并截取四类证据。
+- [x] 写 SSR 页面断言覆盖组合和操作表单、空状态；红灯后实现界面。
+- [x] 提供加载/错误/空方案状态、未保存提醒、金额格式、桌面与窄屏排布。
+- [x] `npm test`、`npm run build` 通过；浏览器按 AC-01～AC-05 操作并截取四类证据。
 
 ### Task 4: 验收及交付
 **Files:** README.md、DESIGN.md、VERIFY.md、docs/DEMO.md、docs/screenshots/*、scripts/package.mjs。
-- [ ] 真实启动构建产物，保存后刷新和重启后重开；检查窄屏无横向溢出。
-- [ ] 完成设计、运行、复盘及 AI 协作记录；据实写投入时间。
-- [ ] 请求独立代码审阅，修复重要问题并验证。
-- [ ] 运行 `npm test`、`npm run build`，生成不含依赖/本地数据库/密钥的提交 ZIP，并检查清单。
+- [x] 真实启动构建产物，保存后刷新和重启后重开；检查窄屏无横向溢出。
+- [x] 完成设计、运行、复盘及 AI 协作记录；据实写投入时间。
+- [x] 请求独立代码审阅，修复重要问题并验证。
+- [x] 运行 `npm test`、`npm run build`，生成不含依赖/本地数据库/密钥的提交 ZIP，并检查清单。
