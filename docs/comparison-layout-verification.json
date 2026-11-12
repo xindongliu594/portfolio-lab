@@ -1,0 +1,33 @@
+{
+  "verifiedAt": "2026-11-12T10:35:00.621Z",
+  "layouts": [
+    {
+      "width": 320,
+      "pageFits": true
+    },
+    {
+      "width": 360,
+      "pageFits": true
+    },
+    {
+      "width": 390,
+      "pageFits": true
+    },
+    {
+      "width": 600,
+      "pageFits": true
+    },
+    {
+      "width": 768,
+      "pageFits": true
+    },
+    {
+      "width": 1024,
+      "pageFits": true
+    },
+    {
+      "width": 1440,
+      "pageFits": true
+    }
+  ]
+}

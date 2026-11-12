@@ -1,13 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { Analysis, Operation, PlanDetail, PlanSummary, PortfolioResponse, Simulation, Snapshot } from '../shared/types.js';
-import { money } from './format.js';
+import { money, time } from './format.js';
 import { CalculationDetails, StepTimeline, TradeImpact } from './StepInsights.js';
 import AiAssistant from './AiAssistant.js';
+import PlanLibrary from './PlanLibrary.js';
 import { request } from './api.js';
 
-const time = (value: string) => new Intl.DateTimeFormat('zh-CN', {
-  timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
-}).format(new Date(value));
 const colors = ['#3262d6', '#6387cd', '#8da8d5', '#acbedc', '#c5d2e8'];
 
 function Icon({ name }: { name: 'chart' | 'folder' | 'plus' | 'arrow' | 'save' | 'reset' | 'check' | 'alert' | 'chat' }) {
@@ -174,11 +172,7 @@ export default function App({ initial }: { initial?: PortfolioResponse }) {
         <div className="breadcrumb">研究工作台<span>/</span>{tab === 'workspace' ? '组合分析' : '方案管理'}</div>
         <div className="page-heading"><div><h1>{tab === 'workspace' ? '投资组合分析' : '已保存方案'}</h1><p>{tab === 'workspace' ? '基于固定行情，查看集中度并对比调仓前后的变化。' : '查看保存在本机的调仓方案，重开并复核模拟结果。'}</p></div><button className="secondary" disabled={!!busy} onClick={newDraft}><Icon name="plus" />新建模拟</button></div>
 
-        {tab === 'plans' ? <section className="panel plans-panel">
-          <div className="section-heading"><div><h2>方案档案 <span className="subtle-count">{plans.length}</span></h2><p>保存在本机，可在刷新页面和重启服务后重新打开。</p></div><button className="text-button" onClick={refreshPlans} disabled={!!busy}>刷新列表</button></div>
-          <ErrorBox message={plansError} />
-          {!plans.length ? <div className="empty-state"><span className="empty-icon"><Icon name="folder" /></span><h3>还没有保存的方案</h3><p>完成模拟后，为方案命名并保存，就能在这里重新打开。</p><button className="secondary" onClick={() => setTab('workspace')}>开始模拟<Icon name="arrow" /></button></div> : <div className="plan-grid">{plans.map(plan => <article className="plan-card" key={plan.id}><div className="plan-card-top"><span className="file-icon"><Icon name="folder" /></span><span className="status-tag">已保存</span></div><h3>{plan.name}</h3><p>{plan.operationCount} 笔操作 <span>·</span> {plan.snapshotId}</p><div className="plan-card-bottom"><small>{time(plan.createdAt)}</small><button className="text-button" disabled={!!busy} onClick={() => openPlan(plan.id)}>重开方案<Icon name="arrow" /></button></div></article>)}</div>}
-        </section> : <>
+        {tab === 'plans' ? <PlanLibrary plans={plans} busy={!!busy} error={plansError} onRefresh={refreshPlans} onOpen={openPlan} onStart={() => setTab('workspace')} /> : <>
           <div className="snapshot-line"><span className="snapshot-name">{snapshot.name}<span className="portfolio-id">{snapshot.portfolio_id}</span></span><span><span className="snapshot-dot" />固定行情快照 <time>{time(snapshot.snapshot_at)}（北京时间）</time></span><span className="currency-label">CNY / 人民币</span></div>
           {draftSourcePlanId && <div className="saved-banner">新草稿沿用来源方案快照：{snapshot.snapshot_id}，来源方案保持不变。</div>}
           {historical && <div className="history-banner" role="status"><div><strong>{selectedIndex === 0 ? '正在回看原始组合' : `正在回看第 ${selectedIndex} 步`}</strong><span>共 {steps.length} 笔操作，完整方案保持不变。</span></div><button className="text-button" disabled={!!busy} onClick={() => setSelectedStep(null)}>回到最新结果<Icon name="arrow" /></button></div>}

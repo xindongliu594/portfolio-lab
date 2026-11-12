@@ -34,7 +34,7 @@ async function stop() {
   if (!service || service.exitCode !== null) return;
   const exited = once(service, 'exit'); service.kill(); await exited;
 }
-async function screenshot(page, name) { await page.screenshot({ path: join(screenshots, name), fullPage: !/^(10|11)-/.test(name), animations: 'disabled' }); }
+async function screenshot(page, name) { await page.screenshot({ path: join(screenshots, name), fullPage: !/^(10|11|13)-/.test(name), animations: 'disabled' }); }
 
 try {
   await start();
@@ -316,6 +316,77 @@ try {
     checks.push('Demo draft persistence: adopted draft can be named, saved and reopened normally');
   } finally { await ai.close(); }
 
+  const comparePage = await browser.newPage({ viewport: { width: 1440, height: 1050 } });
+  comparePage.on('pageerror', error => consoleErrors.push(error.message));
+  try {
+    const createPlan = async (name, operations) => {
+      const response = await comparePage.request.post(url + '/api/plans', { data: { name, operations } });
+      expect(response.status()).toBe(201); return response.json();
+    };
+    const reduction = await createPlan('对比·科技减仓', [
+      { symbol: 'A01', side: 'sell', quantity: 100 }, { symbol: 'A01', side: 'sell', quantity: 100 },
+      { symbol: 'A05', side: 'buy', quantity: 100 }, { symbol: 'A05', side: 'buy', quantity: 100 },
+    ]);
+    const increase = await createPlan('对比·科技加仓', [{ symbol: 'A01', side: 'buy', quantity: 100 }, { symbol: 'A01', side: 'buy', quantity: 100 }]);
+    const empty = await createPlan('对比·用于切换选择的空方案', []);
+    await comparePage.goto(url);
+    await comparePage.getByRole('button', { name: '添加到模拟', exact: true }).click();
+    await comparePage.getByRole('button', { name: /已保存方案/ }).click();
+    const select = name => comparePage.getByRole('checkbox', { name: `选择${name}用于对比`, exact: true });
+    const compare = comparePage.getByRole('button', { name: '对比所选方案', exact: true });
+    await expect(compare).toBeDisabled();
+    await select(reduction.name).check(); await expect(compare).toBeDisabled();
+    await select(increase.name).check(); await expect(compare).toBeEnabled();
+    await expect(select(empty.name)).toBeDisabled();
+    await comparePage.route(`**/api/plans/${increase.id}`, route => route.abort());
+    await compare.click();
+    await expect(comparePage.locator('.plans-panel [role="alert"]')).toContainText('无法连接');
+    await expect(comparePage.locator('.plan-comparison')).toHaveCount(0);
+    await expect(select(reduction.name)).toBeChecked(); await expect(select(increase.name)).toBeChecked();
+    await comparePage.unroute(`**/api/plans/${increase.id}`);
+    await compare.click();
+    const result = comparePage.locator('.plan-comparison');
+    await expect(result).toBeVisible();
+    await expect(result.locator('.comparison-basis')).toContainText('对比依据一致');
+    const cashRow = result.getByRole('row').filter({ has: comparePage.getByRole('rowheader', { name: '可用现金', exact: true }) });
+    await expect(cashRow).toContainText('20,000.00'); await expect(cashRow).toContainText('¥0.00');
+    const techRow = result.locator('[data-industry="科技"]');
+    await expect(techRow).toContainText('40.00%'); await expect(techRow).toContainText('80.00%');
+    await expect(result.locator('.comparison-alerts')).toContainText('当前无超限提醒');
+    await expect(result.locator('.comparison-alerts')).toContainText('60.00%');
+    await screenshot(comparePage, '12-plan-comparison.png');
+    const layouts = [];
+    for (const width of [320, 360, 390, 600, 768, 1024, 1440]) {
+      await comparePage.setViewportSize({ width, height: 844 });
+      const fits = await comparePage.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
+      expect(fits).toBe(true); layouts.push({ width, pageFits: fits });
+    }
+    await writeFile(resolve('docs/comparison-layout-verification.json'), JSON.stringify({ verifiedAt: new Date().toISOString(), layouts }, null, 2) + '\n');
+    await comparePage.setViewportSize({ width: 390, height: 844 });
+    await result.evaluate(element => element.scrollIntoView({ block: 'start' }));
+    await screenshot(comparePage, '13-plan-comparison-mobile.png');
+    await comparePage.setViewportSize({ width: 1440, height: 1050 });
+    await comparePage.getByRole('button', { name: '返回选择', exact: true }).click();
+    await select(increase.name).uncheck(); await select(empty.name).check();
+    await compare.click();
+    await expect(result).toContainText(empty.name); await expect(result).not.toContainText(increase.name);
+    await comparePage.getByRole('button', { name: '返回选择', exact: true }).click();
+    await comparePage.getByRole('button', { name: '清空选择', exact: true }).click();
+    await expect(compare).toBeDisabled();
+    await comparePage.getByRole('button', { name: '组合分析', exact: true }).click();
+    await expect(comparePage.locator('.operation-list li')).toHaveCount(1);
+    await expect(comparePage.locator('.simulation-summary')).toContainText('30,000.00');
+    await comparePage.getByRole('button', { name: /已保存方案/ }).click();
+    comparePage.once('dialog', dialog => dialog.dismiss());
+    await comparePage.locator('.plan-card').filter({ hasText: reduction.name }).getByRole('button', { name: '重开方案', exact: true }).click();
+    await expect(comparePage.getByRole('heading', { name: '已保存方案', exact: true })).toBeVisible();
+    const unchanged = await (await comparePage.request.get(url + '/api/plans/' + reduction.id)).json();
+    expect(unchanged.operations).toEqual(reduction.operations);
+    checks.push('Plan comparison: two-plan limit, server facts, changed rows, empty alerts, network failure and retry');
+    checks.push('Plan comparison state: replacing/clearing selection, original draft retained and saved records unchanged');
+    checks.push('Plan comparison responsive: 320-1440px contain horizontal table scrolling');
+  } finally { await comparePage.close(); }
+
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await expect(page.getByRole('heading', { name: '投资组合分析', exact: true })).toBeVisible();
@@ -361,6 +432,17 @@ try {
     await expect(branch.locator('.main-stat')).toContainText('100,000.00');
     expect((await (await fetch(url + '/api/portfolio')).json()).snapshot.snapshot_id).toBe('NEW-SNAPSHOT');
     checks.push('Saved-snapshot branch: old-plan adoption, more trades, chat, save and reopen retain old snapshot despite changed seed');
+    const newPlan = await branch.request.post(url + '/api/plans', { data: { name: '对比·新快照', operations: [] } });
+    expect(newPlan.status()).toBe(201);
+    await branch.getByRole('button', { name: /已保存方案/ }).click();
+    await branch.getByRole('button', { name: '刷新列表', exact: true }).click();
+    await branch.getByRole('checkbox', { name: '选择旧快照分支用于对比', exact: true }).check();
+    await branch.getByRole('checkbox', { name: '选择对比·新快照用于对比', exact: true }).check();
+    await branch.getByRole('button', { name: '对比所选方案', exact: true }).click();
+    await expect(branch.locator('.comparison-basis')).toContainText('快照内容不同');
+    await expect(branch.locator('.comparison-sources')).toContainText('NEW-SNAPSHOT');
+    await expect(branch.locator('.comparison-sources')).toContainText('SNAP-20261102');
+    checks.push('Plan comparison snapshot isolation: different saved bases display explicit warning and each snapshot identity');
   } finally { await branch.close(); }
   expect(consoleErrors).toEqual([]);
   const report = { verifiedAt: new Date().toISOString(), node: process.version, browser: await browser.version(), viewport: [1440, 1100], checks, pageErrors: consoleErrors };

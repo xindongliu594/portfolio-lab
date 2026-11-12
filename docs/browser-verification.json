@@ -1,5 +1,5 @@
 {
-  "verifiedAt": "2026-11-12T01:25:41.646Z",
+  "verifiedAt": "2026-11-12T10:35:03.843Z",
   "node": "v24.15.0",
   "browser": "157.0.8103.39",
   "viewport": [
@@ -26,8 +26,12 @@
     "Demo advice: backend-validated sell draft adopted only by explicit click",
     "Demo context: data change resets chat; no needless trades; historical adoption protects later unsaved operations",
     "Demo draft persistence: adopted draft can be named, saved and reopened normally",
+    "Plan comparison: two-plan limit, server facts, changed rows, empty alerts, network failure and retry",
+    "Plan comparison state: replacing/clearing selection, original draft retained and saved records unchanged",
+    "Plan comparison responsive: 320-1440px contain horizontal table scrolling",
     "390px viewport: no page-level horizontal overflow; table scroll is contained",
-    "Saved-snapshot branch: old-plan adoption, more trades, chat, save and reopen retain old snapshot despite changed seed"
+    "Saved-snapshot branch: old-plan adoption, more trades, chat, save and reopen retain old snapshot despite changed seed",
+    "Plan comparison snapshot isolation: different saved bases display explicit warning and each snapshot identity"
   ],
   "pageErrors": []
 }
