@@ -34,7 +34,7 @@ async function stop() {
   if (!service || service.exitCode !== null) return;
   const exited = once(service, 'exit'); service.kill(); await exited;
 }
-async function screenshot(page, name) { await page.screenshot({ path: join(screenshots, name), fullPage: true }); }
+async function screenshot(page, name) { await page.screenshot({ path: join(screenshots, name), fullPage: !/^(10|11)-/.test(name), animations: 'disabled' }); }
 
 try {
   await start();
@@ -189,13 +189,53 @@ try {
   ai.on('pageerror', error => consoleErrors.push(error.message));
   try {
     await ai.goto(url);
-    await expect(ai.getByRole('button', { name: 'AI 助手', exact: true })).toBeVisible({ timeout: 3000 });
-    await ai.getByRole('button', { name: 'AI 助手', exact: true }).click();
+    await expect(ai.getByRole('button', { name: '打开 AI 助手', exact: true })).toBeVisible({ timeout: 3000 });
+    const drawer = ai.getByRole('dialog', { name: 'AI 助手', exact: true });
+    const launcher = ai.getByRole('button', { name: '打开 AI 助手', exact: true });
+    await expect(drawer).not.toBeVisible();
+    await launcher.click();
+    await expect(drawer).toBeVisible();
+    await drawer.evaluate(el => Promise.all(el.getAnimations().map(a => a.finished)));
+    const layouts = [];
+    for (const width of [320, 360, 390, 600, 601, 640, 768, 800, 801, 980, 1024, 1440]) {
+      await ai.setViewportSize({width, height: 844});
+      const layout = await drawer.evaluate(el => {
+        const r = el.getBoundingClientRect();
+        return {width: innerWidth, left: r.left, right: r.right, height: r.height, fits: r.left >= -1 && r.right <= innerWidth + 1 && el.scrollWidth <= el.clientWidth && document.documentElement.scrollWidth <= innerWidth};
+      });
+      expect(layout.fits).toBe(true);
+      layouts.push(layout);
+    }
+    await writeFile(resolve('docs/assistant-layout-verification.json'), JSON.stringify({verifiedAt: new Date().toISOString(), layouts}, null, 2) + '\n');
+    await ai.setViewportSize({width: 1440, height: 1050});
+    expect(await ai.evaluate(() => document.body.style.overflow)).toBe('hidden');
+    await drawer.getByRole('button', { name: '关闭 AI 助手', exact: true }).focus();
+    for (let i = 0; i < 14; i++) {
+      await ai.keyboard.press('Tab');
+      // Native modal focus may pass through browser chrome, but never a background page control.
+      expect(await drawer.evaluate(el => el.contains(document.activeElement) || document.activeElement === document.body)).toBe(true);
+    }
+    await ai.keyboard.press('Escape');
+    await expect(drawer).not.toBeVisible();
+    await expect(launcher).toBeFocused();
+    expect(await ai.evaluate(() => document.body.style.overflow)).not.toBe('hidden');
+    await launcher.click();
+    await ai.mouse.click(20, 200);
+    await expect(drawer).not.toBeVisible();
+    await ai.getByRole('button', { name: /已保存方案/ }).click();
+    await launcher.click();
+    await expect(drawer).toBeVisible();
+    await ai.getByRole('button', { name: '关闭 AI 助手', exact: true }).click();
+    await ai.getByRole('button', { name: '组合分析', exact: true }).click();
+    await launcher.click();
+    checks.push('Floating assistant: global launcher, right dialog, modal keyboard isolation/focus restore, Escape, backdrop and scroll lock');
     await expect(ai.locator('.demo-mode-banner')).toContainText('本地规则生成');
     await expect(ai.locator('.demo-mode-banner')).toContainText('未接入真实模型');
+    await ai.getByRole('button', { name: '查看辅助建议', exact: true }).click();
     await ai.getByRole('button', { name: '生成演示建议', exact: true }).click();
     await expect(ai.locator('.assistant-draft')).toContainText('30,000.00');
     await expect(ai.locator('.assistant-draft')).toContainText('100 股');
+    await ai.getByRole('button', { name: '切换到对话问答', exact: true }).click();
     await ai.getByRole('button', { name: '现金和总资产怎么算？', exact: true }).click();
     await expect(ai.locator('.chat-message.assistant')).toHaveCount(1);
     await expect(ai.locator('.chat-message.assistant').last()).toContainText('20000.00');
@@ -209,8 +249,8 @@ try {
     await ai.getByRole('button', { name: '发送', exact: true }).click();
     await expect(ai.locator('.chat-message.assistant')).toHaveCount(5);
     await expect(ai.locator('.chat-message.assistant').last()).toContainText('20000.00');
-    await ai.getByRole('button', { name: '组合分析', exact: true }).click();
-    await ai.getByRole('button', { name: 'AI 助手', exact: true }).click();
+    await ai.getByRole('button', { name: '关闭 AI 助手', exact: true }).click();
+    await ai.getByRole('button', { name: '打开 AI 助手', exact: true }).click();
     await expect(ai.locator('.chat-message.assistant')).toHaveCount(5);
     await ai.route('**/api/assistant/chat', route => route.abort());
     await ai.getByLabel('输入你的问题', { exact: true }).fill('当前有哪些超限？');
@@ -220,38 +260,49 @@ try {
     await ai.unroute('**/api/assistant/chat');
     await ai.getByRole('button', { name: '发送', exact: true }).click();
     await expect(ai.locator('.chat-message.assistant')).toHaveCount(6);
+    await ai.getByLabel('输入你的问题', { exact: true }).fill('暂存的问题');
+    await ai.getByRole('button', { name: '关闭 AI 助手', exact: true }).click();
+    await launcher.click();
+    await expect(ai.getByLabel('输入你的问题', { exact: true })).toHaveValue('暂存的问题');
     await screenshot(ai, '10-demo-ai-assistant.png');
     await ai.setViewportSize({ width: 390, height: 844 });
     expect(await ai.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await expect(ai.getByRole('button', { name: '发送', exact: true })).toBeInViewport();
+    await expect(ai.getByRole('button', { name: '查看辅助建议', exact: true })).toBeInViewport();
     await screenshot(ai, '11-demo-ai-mobile.png');
     await ai.setViewportSize({ width: 1440, height: 1050 });
     checks.push('Demo chat: explicit local-demo label, multi-turn follow-up, navigation retention, network failure and retry');
     checks.push('Demo assistant mobile: suggestion and chat layout fits 390px');
+    await ai.getByRole('button', { name: '查看辅助建议', exact: true }).click();
     await ai.getByRole('button', { name: '采用为新模拟', exact: true }).click();
     await expect(ai.locator('.operation-list li')).toHaveCount(1);
     await expect(ai.locator('.simulation-summary')).toContainText('30,000.00');
     await expect(ai.locator('.risk-banner')).toContainText('无集中度超限');
     checks.push('Demo advice: backend-validated sell draft adopted only by explicit click');
-    await ai.getByRole('button', { name: 'AI 助手', exact: true }).click();
+    await ai.getByRole('button', { name: '打开 AI 助手', exact: true }).click();
     await expect(ai.locator('.chat-message')).toHaveCount(0);
+    await ai.getByRole('button', { name: '查看辅助建议', exact: true }).click();
     await ai.getByRole('button', { name: '生成演示建议', exact: true }).click();
     await expect(ai.locator('.assistant-advice')).toContainText('没有集中度超限');
     await expect(ai.getByRole('button', { name: '采用为新模拟', exact: true })).toHaveCount(0);
-    await ai.getByRole('button', { name: '组合分析', exact: true }).click();
+    await ai.getByRole('button', { name: '关闭 AI 助手', exact: true }).click();
     await ai.getByLabel('交易标的', { exact: true }).selectOption('A02');
     await ai.getByRole('button', { name: '＋ 买入', exact: true }).click();
     await ai.getByRole('button', { name: '添加到模拟', exact: true }).click();
     await expect(ai.locator('.operation-list li')).toHaveCount(2);
     await ai.getByRole('button', { name: '查看原始组合', exact: true }).click();
-    await ai.getByRole('button', { name: 'AI 助手', exact: true }).click();
+    await ai.getByRole('button', { name: '打开 AI 助手', exact: true }).click();
+    await ai.getByRole('button', { name: '查看辅助建议', exact: true }).click();
     await ai.getByRole('button', { name: '生成演示建议', exact: true }).click();
     ai.removeAllListeners('dialog'); ai.once('dialog', dialog => dialog.dismiss());
+    await ai.getByRole('button', { name: '查看辅助建议', exact: true }).click();
     await ai.getByRole('button', { name: '采用为新模拟', exact: true }).click();
-    await expect(ai.getByRole('heading', { name: 'AI 助手', exact: true })).toBeVisible();
-    await ai.getByRole('button', { name: '组合分析', exact: true }).click();
+    await expect(ai.getByRole('dialog', { name: 'AI 助手', exact: true })).toBeVisible();
+    await ai.getByRole('button', { name: '关闭 AI 助手', exact: true }).click();
     await expect(ai.locator('.operation-list li')).toHaveCount(2);
-    await ai.getByRole('button', { name: 'AI 助手', exact: true }).click();
+    await ai.getByRole('button', { name: '打开 AI 助手', exact: true }).click();
     ai.on('dialog', dialog => dialog.accept());
+    await ai.getByRole('button', { name: '查看辅助建议', exact: true }).click();
     await ai.getByRole('button', { name: '采用为新模拟', exact: true }).click();
     await expect(ai.locator('.operation-list li')).toHaveCount(1);
     checks.push('Demo context: data change resets chat; no needless trades; historical adoption protects later unsaved operations');
@@ -284,7 +335,8 @@ try {
     await branch.goto(url);
     await branch.getByRole('button', { name: /已保存方案/ }).click();
     await branch.locator('.plan-card').filter({ hasText: '科技行业调仓 · 验收方案' }).getByRole('button', { name: '重开方案', exact: true }).click();
-    await branch.getByRole('button', { name: 'AI 助手', exact: true }).click();
+    await branch.getByRole('button', { name: '打开 AI 助手', exact: true }).click();
+    await branch.getByRole('button', { name: '查看辅助建议', exact: true }).click();
     await branch.getByRole('button', { name: '生成演示建议', exact: true }).click();
     await expect(branch.locator('.assistant-draft')).toContainText('30,000.00');
     await branch.getByRole('button', { name: '采用为新模拟', exact: true }).click();
@@ -295,11 +347,11 @@ try {
     await branch.getByLabel('交易数量', { exact: true }).fill('10');
     await branch.getByRole('button', { name: '添加到模拟', exact: true }).click();
     await expect(branch.locator('.simulation-summary')).toContainText('29,000.00');
-    await branch.getByRole('button', { name: 'AI 助手', exact: true }).click();
+    await branch.getByRole('button', { name: '打开 AI 助手', exact: true }).click();
     await branch.getByRole('button', { name: '现金和总资产怎么算？', exact: true }).click();
     await expect(branch.locator('.chat-message.assistant').last()).toContainText('29000.00');
     await expect(branch.locator('.assistant-context')).toContainText('SNAP-20261102');
-    await branch.getByRole('button', { name: '组合分析', exact: true }).click();
+    await branch.getByRole('button', { name: '关闭 AI 助手', exact: true }).click();
     await branch.getByLabel('保存当前方案', { exact: true }).fill('旧快照分支');
     await branch.getByRole('button', { name: '保存方案', exact: true }).click();
     await branch.reload();

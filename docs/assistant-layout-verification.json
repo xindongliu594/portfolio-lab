@@ -1,66 +1,89 @@
 {
-  "verifiedAt": "2026-11-11T04:23:37.517Z",
-  "results": [
+  "verifiedAt": "2026-11-12T01:25:35.267Z",
+  "layouts": [
     {
       "width": 320,
-      "pageFits": true,
-      "panelFits": true
+      "left": 0,
+      "right": 320,
+      "height": 844,
+      "fits": true
     },
     {
       "width": 360,
-      "pageFits": true,
-      "panelFits": true
+      "left": 0,
+      "right": 360,
+      "height": 844,
+      "fits": true
     },
     {
       "width": 390,
-      "pageFits": true,
-      "panelFits": true
+      "left": 0,
+      "right": 390,
+      "height": 844,
+      "fits": true
     },
     {
       "width": 600,
-      "pageFits": true,
-      "panelFits": true
+      "left": 120,
+      "right": 600,
+      "height": 844,
+      "fits": true
     },
     {
       "width": 601,
-      "pageFits": true,
-      "panelFits": true
+      "left": 121,
+      "right": 601,
+      "height": 844,
+      "fits": true
     },
     {
       "width": 640,
-      "pageFits": true,
-      "panelFits": true
+      "left": 160,
+      "right": 640,
+      "height": 844,
+      "fits": true
     },
     {
       "width": 768,
-      "pageFits": true,
-      "panelFits": true
+      "left": 288,
+      "right": 768,
+      "height": 844,
+      "fits": true
     },
     {
       "width": 800,
-      "pageFits": true,
-      "panelFits": true
+      "left": 320,
+      "right": 800,
+      "height": 844,
+      "fits": true
     },
     {
       "width": 801,
-      "pageFits": true,
-      "panelFits": true
+      "left": 321,
+      "right": 801,
+      "height": 844,
+      "fits": true
     },
     {
       "width": 980,
-      "pageFits": true,
-      "panelFits": true
+      "left": 500,
+      "right": 980,
+      "height": 844,
+      "fits": true
     },
     {
       "width": 1024,
-      "pageFits": true,
-      "panelFits": true
+      "left": 544,
+      "right": 1024,
+      "height": 844,
+      "fits": true
     },
     {
       "width": 1440,
-      "pageFits": true,
-      "panelFits": true
+      "left": 960,
+      "right": 1440,
+      "height": 844,
+      "fits": true
     }
-  ],
-  "externalRequests": []
+  ]
 }

@@ -1,7 +1,7 @@
 {
-  "verifiedAt": "2026-11-11T04:33:34.394Z",
+  "verifiedAt": "2026-11-12T01:25:41.646Z",
   "node": "v24.15.0",
-  "browser": "156.0.8078.49",
+  "browser": "157.0.8103.39",
   "viewport": [
     1440,
     1100
@@ -20,6 +20,7 @@
     "AC-05 restart: real production server restarted, persisted plan restored, original unchanged",
     "Persisted replay: step impacts are regenerated from saved snapshot after service restart",
     "Continue after replay: third trade starts from latest state, cash 25000 to 24000",
+    "Floating assistant: global launcher, right dialog, modal keyboard isolation/focus restore, Escape, backdrop and scroll lock",
     "Demo chat: explicit local-demo label, multi-turn follow-up, navigation retention, network failure and retry",
     "Demo assistant mobile: suggestion and chat layout fits 390px",
     "Demo advice: backend-validated sell draft adopted only by explicit click",

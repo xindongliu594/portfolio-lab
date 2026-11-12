@@ -8,6 +8,7 @@ const prompts = ['当前有哪些超限？', '现金和总资产怎么算？', '
 export default function AiAssistant({ context, analysis, sourceName, snapshotId, onAdopt }: {
   context: AssistantContextInput; analysis: Analysis; sourceName: string; snapshotId: string; onAdopt: (result: Simulation) => void;
 }) {
+  const [view, setView] = useState<'chat' | 'advice'>('chat');
   const [advice, setAdvice] = useState<DemoAdvice | null>(null);
   const [adviceLoading, setAdviceLoading] = useState(false);
   const [adviceError, setAdviceError] = useState('');
@@ -42,8 +43,9 @@ export default function AiAssistant({ context, analysis, sourceName, snapshotId,
   return <div className="assistant-workspace">
     <div className="demo-mode-banner"><span className="demo-spark" aria-hidden="true">✧</span><div><strong>演示模式 · 本地规则生成</strong><p>未接入真实模型。建议与回复使用当前组合及固定规则，便于演示完整交互。</p></div><span className="demo-label">DEMO</span></div>
     <div className="assistant-context"><div><span className="assistant-source-dot" /><strong>{sourceName}</strong><span>{context.stepIndex === 0 ? '原始组合' : `第 ${context.stepIndex} 步`}</span><span>快照 {snapshotId}</span>{(context.planId || context.sourcePlanId) && <span>来源方案快照</span>}</div><div><span>总资产 <strong>¥{money(analysis.totalAssets)}</strong></span><span>现金 <strong>¥{money(analysis.cash)}</strong></span><span>超限 <strong>{analysis.alerts.length} 项</strong></span></div></div>
+    <div className="assistant-switch" role="group" aria-label="助手功能"><button aria-label="切换到对话问答" aria-pressed={view === 'chat'} onClick={() => setView('chat')}>对话问答</button><button aria-label="查看辅助建议" aria-pressed={view === 'advice'} onClick={() => setView('advice')}>辅助建议</button></div>
     <div className="assistant-grid">
-      <section className="panel assistant-advice"><div className="section-heading"><div><h2>辅助建议</h2><p>从当前集中度出发，预览一个可验算的模拟草案。</p></div><span className="view-badge blue">规则演示</span></div>
+      <section className="panel assistant-advice" hidden={view !== 'advice'}><div className="section-heading"><div><h2>辅助建议</h2><p>从当前集中度出发，预览一个可验算的模拟草案。</p></div><span className="view-badge blue">规则演示</span></div>
         <div className="advice-body"><button className="primary full-width" disabled={adviceLoading} onClick={generate}>{adviceLoading ? '正在生成演示建议…' : advice ? '重新生成演示建议' : '生成演示建议'}</button>
           {adviceError && <div className="error-box" role="alert">{adviceError}</div>}
           {!advice && !adviceLoading && <div className="advice-empty"><span>✧</span><h3>先看清问题，再比较调整</h3><p>生成后会列出超限依据、调整思路及后端验算结果。采用前，当前组合保持不变。</p></div>}
@@ -56,7 +58,7 @@ export default function AiAssistant({ context, analysis, sourceName, snapshotId,
         </div>
       </section>
 
-      <section className="panel assistant-chat"><div className="section-heading"><div><h2>对话问答</h2><p>结合当前步骤，聊聊集中度、规则与操作变化。</p></div><button className="text-button" disabled={chatLoading || !messages.length} onClick={() => { setMessages([]); setLastTopic(undefined); setChatError(''); setQuestion(''); }}>清空对话</button></div>
+      <section className="panel assistant-chat" hidden={view !== 'chat'}><div className="section-heading"><div><h2>对话问答</h2><p>结合当前步骤，聊聊集中度、规则与操作变化。</p></div><button className="text-button" disabled={chatLoading || !messages.length} onClick={() => { setMessages([]); setLastTopic(undefined); setChatError(''); setQuestion(''); }}>清空对话</button></div>
         <div className="chat-thread" role="log" aria-label="演示对话记录" aria-live="polite" ref={chatList}>
           {!messages.length && <div className="chat-empty"><span className="chat-avatar">✧</span><strong>你好，我是组合演示助手</strong><p>可以先问“当前有哪些超限”，也可以在回复后继续追问。这里展示的是本地规则问答。</p></div>}
           {messages.map((message, i) => <article className={`chat-message ${message.role}`} key={i}><span>{message.role === 'user' ? '你' : '演示助手 · 本地规则'}</span><p>{message.content}</p></article>)}

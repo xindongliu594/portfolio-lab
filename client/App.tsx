@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { Analysis, Operation, PlanDetail, PlanSummary, PortfolioResponse, Simulation, Snapshot } from '../shared/types.js';
 import { money } from './format.js';
 import { CalculationDetails, StepTimeline, TradeImpact } from './StepInsights.js';
@@ -57,7 +57,9 @@ export default function App({ initial }: { initial?: PortfolioResponse }) {
   const [draftSourcePlanId, setDraftSourcePlanId] = useState<string | null>(null);
   const [draftSnapshot, setDraftSnapshot] = useState<Snapshot | null>(null);
   const [plans, setPlans] = useState<PlanSummary[]>([]);
-  const [tab, setTab] = useState<'workspace' | 'plans' | 'assistant'>('workspace');
+  const [tab, setTab] = useState<'workspace' | 'plans'>('workspace');
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const assistantDialog = useRef<HTMLDialogElement>(null);
   const [busy, setBusy] = useState('');
   const [loadError, setLoadError] = useState('');
   const [plansError, setPlansError] = useState('');
@@ -75,6 +77,15 @@ export default function App({ initial }: { initial?: PortfolioResponse }) {
   const historical = selectedIndex < steps.length;
   const viewedStep = selectedIndex > 0 ? steps[selectedIndex - 1] : undefined;
   const dirty = !activePlan && operations.length > 0;
+
+  useEffect(() => {
+    const dialog = assistantDialog.current;
+    if (!assistantOpen || !dialog) return;
+    dialog.showModal();
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { dialog.close(); document.body.style.overflow = previousOverflow; };
+  }, [assistantOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -138,7 +149,7 @@ export default function App({ initial }: { initial?: PortfolioResponse }) {
     setDraftSourcePlanId(activePlan?.id ?? draftSourcePlanId);
     setDraftSnapshot(activePlan?.snapshot ?? draftSnapshot);
     setSimulation(result); setActivePlan(null); setSelectedStep(null); setName(''); setTradeError(''); setSaveError('');
-    setNotice('已采用演示草案，当前为未保存的新模拟。'); setTab('workspace');
+    setNotice('已采用演示草案，当前为未保存的新模拟。'); setTab('workspace'); setAssistantOpen(false);
   }
 
   const original = simulation?.original ?? portfolio?.analysis;
@@ -152,7 +163,7 @@ export default function App({ initial }: { initial?: PortfolioResponse }) {
   return <div className="app-shell">
     <header className="app-header"><div className="header-inner">
       <a href="/" className="brand" onClick={e => { e.preventDefault(); setTab('workspace'); }}><span className="brand-icon"><Icon name="chart" /></span><span>持仓研究室<small>PORTFOLIO LAB</small></span></a>
-      <nav aria-label="主导航"><button disabled={!!busy} className={tab === 'workspace' ? 'nav-active' : ''} onClick={() => setTab('workspace')}><Icon name="chart" />组合分析</button><button disabled={!!busy} className={tab === 'assistant' ? 'nav-active' : ''} onClick={() => setTab('assistant')}><Icon name="chat" />AI 助手</button><button disabled={!!busy} className={tab === 'plans' ? 'nav-active' : ''} onClick={() => setTab('plans')}><Icon name="folder" />已保存方案<span className="nav-count">{plans.length}</span></button></nav>
+      <nav aria-label="主导航"><button disabled={!!busy} className={tab === 'workspace' ? 'nav-active' : ''} onClick={() => setTab('workspace')}><Icon name="chart" />组合分析</button><button disabled={!!busy} className={tab === 'plans' ? 'nav-active' : ''} onClick={() => setTab('plans')}><Icon name="folder" />已保存方案<span className="nav-count">{plans.length}</span></button></nav>
       <div className="local-status"><span />本地工作台</div>
     </div></header>
 
@@ -160,15 +171,14 @@ export default function App({ initial }: { initial?: PortfolioResponse }) {
       {!portfolio || !current || !original || !snapshot ? <section className="panel loading-panel" role="status">
         {loadError ? <><ErrorBox message={loadError} /><button className="primary" onClick={() => window.location.reload()}>重新连接</button></> : <><span className="spinner" />正在载入投资组合…</>}
       </section> : <>
-        <div className="breadcrumb">研究工作台<span>/</span>{tab === 'workspace' ? '组合分析' : tab === 'assistant' ? 'AI 助手' : '方案管理'}</div>
-        <div className="page-heading"><div><h1>{tab === 'workspace' ? '投资组合分析' : tab === 'assistant' ? 'AI 助手' : '已保存方案'}</h1><p>{tab === 'workspace' ? '基于固定行情，查看集中度并对比调仓前后的变化。' : tab === 'assistant' ? '把组合数据变成可理解的解读，并预览可验证的调仓草案。' : '查看保存在本机的调仓方案，重开并复核模拟结果。'}</p></div><button className="secondary" disabled={!!busy} onClick={newDraft}><Icon name="plus" />新建模拟</button></div>
-        <div hidden={tab !== 'assistant'}><AiAssistant key={JSON.stringify(assistantContext)} context={assistantContext} analysis={current} sourceName={activePlan?.name ?? snapshot.name} snapshotId={snapshot.snapshot_id} onAdopt={adoptAssistantDraft} /></div>
+        <div className="breadcrumb">研究工作台<span>/</span>{tab === 'workspace' ? '组合分析' : '方案管理'}</div>
+        <div className="page-heading"><div><h1>{tab === 'workspace' ? '投资组合分析' : '已保存方案'}</h1><p>{tab === 'workspace' ? '基于固定行情，查看集中度并对比调仓前后的变化。' : '查看保存在本机的调仓方案，重开并复核模拟结果。'}</p></div><button className="secondary" disabled={!!busy} onClick={newDraft}><Icon name="plus" />新建模拟</button></div>
 
         {tab === 'plans' ? <section className="panel plans-panel">
           <div className="section-heading"><div><h2>方案档案 <span className="subtle-count">{plans.length}</span></h2><p>保存在本机，可在刷新页面和重启服务后重新打开。</p></div><button className="text-button" onClick={refreshPlans} disabled={!!busy}>刷新列表</button></div>
           <ErrorBox message={plansError} />
           {!plans.length ? <div className="empty-state"><span className="empty-icon"><Icon name="folder" /></span><h3>还没有保存的方案</h3><p>完成模拟后，为方案命名并保存，就能在这里重新打开。</p><button className="secondary" onClick={() => setTab('workspace')}>开始模拟<Icon name="arrow" /></button></div> : <div className="plan-grid">{plans.map(plan => <article className="plan-card" key={plan.id}><div className="plan-card-top"><span className="file-icon"><Icon name="folder" /></span><span className="status-tag">已保存</span></div><h3>{plan.name}</h3><p>{plan.operationCount} 笔操作 <span>·</span> {plan.snapshotId}</p><div className="plan-card-bottom"><small>{time(plan.createdAt)}</small><button className="text-button" disabled={!!busy} onClick={() => openPlan(plan.id)}>重开方案<Icon name="arrow" /></button></div></article>)}</div>}
-        </section> : tab === 'assistant' ? null : <>
+        </section> : <>
           <div className="snapshot-line"><span className="snapshot-name">{snapshot.name}<span className="portfolio-id">{snapshot.portfolio_id}</span></span><span><span className="snapshot-dot" />固定行情快照 <time>{time(snapshot.snapshot_at)}（北京时间）</time></span><span className="currency-label">CNY / 人民币</span></div>
           {draftSourcePlanId && <div className="saved-banner">新草稿沿用来源方案快照：{snapshot.snapshot_id}，来源方案保持不变。</div>}
           {historical && <div className="history-banner" role="status"><div><strong>{selectedIndex === 0 ? '正在回看原始组合' : `正在回看第 ${selectedIndex} 步`}</strong><span>共 {steps.length} 笔操作，完整方案保持不变。</span></div><button className="text-button" disabled={!!busy} onClick={() => setSelectedStep(null)}>回到最新结果<Icon name="arrow" /></button></div>}
@@ -218,5 +228,16 @@ export default function App({ initial }: { initial?: PortfolioResponse }) {
         <footer className="app-footer"><span>PORTFOLIO LAB <span>·</span> 投资组合分析与调仓模拟</span><span>固定行情 · 本地保存 · 单用户</span></footer>
       </>}
     </main>
+    {portfolio && current && snapshot && <>
+      <button className="assistant-fab" aria-label="打开 AI 助手" aria-haspopup="dialog" aria-expanded={assistantOpen} aria-controls="assistant-drawer" title="AI 助手" disabled={!!busy} onClick={() => setAssistantOpen(true)}><Icon name="chat" /><span>AI</span></button>
+      <dialog id="assistant-drawer" className="assistant-drawer" aria-labelledby="assistant-title" ref={assistantDialog} onClose={() => setAssistantOpen(false)} onClick={event => {
+        if (event.target !== event.currentTarget) return;
+        const bounds = event.currentTarget.getBoundingClientRect();
+        if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) setAssistantOpen(false);
+      }}>
+        <header className="assistant-drawer-heading"><span className="assistant-heading-icon"><Icon name="chat" /></span><div><h2 id="assistant-title">AI 助手</h2><p>本地演示 · 基于当前组合</p></div><button className="assistant-close" aria-label="关闭 AI 助手" autoFocus onClick={() => setAssistantOpen(false)}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6" /></svg></button></header>
+        <div className="assistant-drawer-body"><AiAssistant key={JSON.stringify(assistantContext)} context={assistantContext} analysis={current} sourceName={activePlan?.name ?? snapshot.name} snapshotId={snapshot.snapshot_id} onAdopt={adoptAssistantDraft} /></div>
+      </dialog>
+    </>}
   </div>;
 }
