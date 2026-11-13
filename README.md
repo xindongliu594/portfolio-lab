@@ -135,4 +135,6 @@ question上限1000字符，history最多6条user/assistant消息，每条1000字
 
 ## 提交说明
 
+完整源码与交付材料位于 [GitHub 仓库](https://github.com/xindongliu594/portfolio-lab)。仓库包含初始方案提交及后续实现记录，评审者可克隆或下载后按本文档本地启动。
+
 交付材料含源码、锁文件、初始化数据、设计材料、AI 协作记录、验证记录和截图。实际投入时间与未完成项见 [VERIFY.md](VERIFY.md)，演示讲解见 [docs/DEMO.md](docs/DEMO.md)。提交渠道和截止时间以招聘方通知为准。
